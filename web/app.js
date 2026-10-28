@@ -1,6 +1,8 @@
 // The page: the snapshot of the sweep, the model in a worker, the layers,
-// steering, the Jacobian lens, the swap, and Claude through the visitor's own OpenRouter key.
+// steering, the Jacobian lens, the swap, Claude through the visitor's own OpenRouter key,
+// and the rooms that a share link opens.
 import { createLayers } from "./art.mjs";
+import { joinRoom, newId, roomOfHash } from "./room.mjs";
 import { createTokenizer } from "./tokenizer.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -34,7 +36,7 @@ $("nExplored").textContent = snap.neurons.length.toLocaleString("en");
 
 // ---- state ----
 let selected = null;           // { layer, index }
-let live = null;               // { ids, pieces, record }
+let live = null;               // { text, ids, pieces, record }
 let livePos = 0;
 let tokenizer = null, maxTokens = 128;
 let lastSteer = null;          // { prompt, value, base, steered } of the last Generate
@@ -68,7 +70,10 @@ worker.onmessage = ({ data }) => {
     live.record = data.record;
     busy = false;
     buttons();
-    pickToken(live.ids.length - 1);
+    // A run for the room does not send its token back to the room.
+    applying = runFromRoom;
+    runFromRoom = false;
+    try { pickToken(live.ids.length - 1); } finally { applying = false; }
   } else if (data.type === "token") {
     onToken?.(data.token);
   } else if (data.type === "done") {
@@ -82,6 +87,8 @@ worker.onmessage = ({ data }) => {
     busy = false;
     buttons();
   }
+  // The view of the room can need the model, a run or a free worker.
+  if (room) setTimeout(applyRoomView);
 };
 
 $("load").onclick = () => {
@@ -90,14 +97,15 @@ $("load").onclick = () => {
   worker.postMessage({ type: "load" });
 };
 
-$("run").onclick = () => {
-  const ids = tokenizer.encode($("text").value).slice(0, maxTokens);
+function runText() {
+  const text = $("text").value, ids = tokenizer.encode(text).slice(0, maxTokens);
   if (!ids.length) return;
-  live = { ids, pieces: ids.map((id) => tokenizer.decode([id])), record: null };
+  live = { text, ids, pieces: ids.map((id) => tokenizer.decode([id])), record: null };
   busy = true;
   buttons();
   worker.postMessage({ type: "run", ids });
-};
+}
+$("run").onclick = runText;
 
 // ---- your text ----
 function pickToken(p) {
@@ -124,6 +132,7 @@ function pickToken(p) {
     renderNeuron();
     layers.select({ ...selected, z: zs[selected.layer * F + selected.index] });
   }
+  share();
 }
 
 function renderTokens() {
@@ -166,13 +175,14 @@ function contextLine(tokens, values, peak, scale) {
 
 function select(layer, index, scroll = true) {
   selected = { layer, index };
-  location.hash = `${layer}.${index}`;
+  if (!room) location.hash = `${layer}.${index}`;
   renderNeuron();
   renderTokens();
   layers.select({ layer, index, z: live?.record ? zOf(layer, index, liveValue(livePos, layer, index)) : zOf(layer, index, largest(layer, index)) });
   buttons();
   const box = document.querySelector(".neuron").getBoundingClientRect();
   if (scroll && (box.top < 0 || box.top > innerHeight)) document.querySelector(".neuron").scrollIntoView({ block: "start" });
+  share();
 }
 
 function renderNeuron() {
@@ -199,7 +209,9 @@ function renderNeuron() {
       el("td", {}, el("b", { textContent: s.prompt }), document.createTextNode(s.text))))))] : []));
   $("lensOut").replaceChildren();
   $("swapOut").replaceChildren();
+  lensShown = false;
   updateSteerOut();
+  renderNote();
 }
 
 // ---- steering ----
@@ -269,7 +281,8 @@ function probabilities(logits) {
 const tokenRows = (ids, ...columns) => ids.map((id) => el("tr", {}, el("td", { textContent: `“${show(tokenizer.decode([id]))}”` }),
   ...columns.map((c) => el("td", { textContent: c(id) }))));
 
-$("lens").onclick = async () => {
+// fromRoom: the room asked for the lens, so the page does not send it back.
+async function computeLens(fromRoom) {
   const { layer, index } = selected;
   // The step: the neuron's standard deviation in the sweep (README, Lens and swap).
   const h = std(layer, index) || 1;
@@ -285,7 +298,10 @@ $("lens").onclick = async () => {
     el("div", { className: "pair" }, column("Raises", topBy(d.dLogits, 8, (x) => x)), column("Lowers", topBy(d.dLogits, 8, (x) => -x))),
     ...(later.length ? [el("h3", { textContent: "Later neurons it moves most" }),
       el("ol", { className: "neuronlist" }, ...later.map((i) => neuronItem(Math.floor(i / F), i % F, `∂ ${fmt(d.dNeurons[i], 3)}`)))] : []));
-};
+  lensShown = true;
+  if (!fromRoom) share();
+}
+$("lens").onclick = () => computeLens(false);
 
 $("swap").onclick = async () => {
   const { layer, index } = selected;
@@ -400,6 +416,175 @@ $("ask").onclick = async () => {
   }
 };
 
+// ---- rooms ----
+// In a room, the view (the neuron, the text that ran, the token and the lens)
+// and the notes on neurons are the same for all members (README.md, Rooms).
+// The last view that comes to the relay wins. A note changes only from the
+// version that its writer saw.
+const ROOM_URL = new URL("room", location.href).href;
+let room = null, roomId = null;
+let roomReady = false;         // the first reply of the room came
+let roomView = null;           // the view of the room, as the relay last gave it
+let roomViewBy = "";           // the member who sent that view
+let roomNotes = new Map();     // "layer.index" -> { neuron, text, by, version }
+let applying = false;          // the page applies the view of the room: it does not send it back
+let runFromRoom = false;       // the run in the worker is for the view of the room
+let lensShown = false;         // the lens of the selected neuron and token is on the page
+let noteFor = null, noteBase = 0, noteDirty = false;
+
+function share() {
+  if (!room || !roomReady || applying || !selected) return;
+  room.setView({ layer: selected.layer, index: selected.index, text: live?.text ?? null,
+    token: live?.record ? livePos : null, lens: lensShown });
+}
+
+// Makes the page show the view of the room, as far as it can now. The worker
+// messages call it again, so a run or a lens that must wait comes later.
+function applyRoomView() {
+  const v = roomView;
+  if (!v || applying) return;
+  applying = true;
+  try {
+    const ok = (x, n) => Number.isInteger(x) && x >= 0 && x < n;
+    if (ok(v.layer, L) && ok(v.index, F) && (selected?.layer !== v.layer || selected?.index !== v.index)) select(v.layer, v.index, false);
+    if (typeof v.text !== "string") return;
+    if (live?.text !== v.text) {
+      $("text").value = v.text;
+      if (tokenizer && !busy) { runFromRoom = true; runText(); }
+      return;
+    }
+    if (!live.record) return;
+    if (ok(v.token, live.ids.length) && v.token !== livePos) pickToken(v.token);
+    if (v.lens && !lensShown && !busy) computeLens(true);
+  } finally {
+    applying = false;
+  }
+}
+
+const roomName = () => {
+  let name = $("roomName").value.replace(/[\u0000-\u001f\u007f]/g, "").trim() || "Visitor";
+  while (new TextEncoder().encode(name).length > 32) name = name.slice(0, -1);
+  return name;
+};
+try { $("roomName").value = localStorage.getItem("room-name") || ""; } catch { /* no storage */ }
+if (!$("roomName").value) $("roomName").value = `Visitor ${10 + Math.floor(Math.random() * 90)}`;
+$("roomName").onchange = () => { try { localStorage.setItem("room-name", roomName()); } catch { /* no storage */ } };
+
+function showPeople(s) {
+  const names = s.members.map((m) => (m.you ? `${m.name} (you)` : m.name));
+  const ends = new Date(s.expires * 1000).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" });
+  $("roomPeople").textContent = `In the room: ${names.join(", ")}. The room ends on ${ends}.`
+    + (roomViewBy ? ` The last change of the view was by ${roomViewBy}.` : "");
+}
+
+function renderRoomNotes() {
+  const notes = [...roomNotes.values()].map((n) => ({ ...n, at: n.neuron.split(".").map(Number) }))
+    .filter((n) => n.at[0] < L && n.at[1] < F).sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1]);
+  $("roomNotesTitle").hidden = !notes.length;
+  $("roomNotes").replaceChildren(...notes.map((n) => {
+    const li = neuronItem(n.at[0], n.at[1], n.by);
+    li.querySelector(".what").textContent = n.text.split("\n")[0];
+    return li;
+  }));
+}
+
+// The note box of the selected neuron. A note that the member edits stays as
+// it is when the note of the room changes; the save then gives a conflict.
+function renderNote() {
+  $("noteBox").hidden = !room || !selected;
+  if ($("noteBox").hidden) return;
+  const key = `${selected.layer}.${selected.index}`, n = roomNotes.get(key);
+  if (noteFor !== key) { noteFor = key; noteDirty = false; $("noteStatus").textContent = ""; }
+  if (noteDirty) return;
+  $("note").value = n?.text ?? "";
+  noteBase = n?.version ?? 0;
+  $("noteStatus").textContent = n ? `Note by ${n.by}.` : "";
+}
+$("note").oninput = () => { noteDirty = true; };
+$("saveNote").onclick = () => {
+  const text = $("note").value.trim();
+  if (new TextEncoder().encode(text).length > 500) { $("noteStatus").textContent = "The note is too long: 500 bytes at most."; return; }
+  room.note(noteFor, text, noteBase);
+  noteDirty = false;
+  $("noteStatus").textContent = "Saving…";
+};
+
+function onConflict(neuron, text, s) {
+  const theirs = s.notes.find((n) => n.neuron === neuron);
+  const said = theirs ? `${theirs.by} changed this note before your save came. Their note: “${theirs.text}”.`
+    : "Someone deleted this note before your save came.";
+  if (neuron !== noteFor) { $("roomStatus").textContent = `Your note on ${neuron} was not saved. ${said}`; return; }
+  $("note").value = text;
+  noteDirty = true;
+  noteBase = theirs?.version ?? 0;
+  $("noteStatus").textContent = `${said} Your text is still in the box. Save again to put it in place of theirs.`;
+}
+
+function onState(s) {
+  roomReady = true;
+  $("roomStatus").textContent = "";
+  if (s.view_by !== undefined) roomViewBy = s.view_by;
+  showPeople(s);
+  if (s.notes) {
+    roomNotes = new Map(s.notes.map((n) => [n.neuron, n]));
+    renderRoomNotes();
+    renderNote();
+  }
+  // A view of this page that waits to go out is newer than the view in the reply.
+  if (s.view === undefined || room.viewPending()) return;
+  if (!s.view) { share(); return; }       // a new room takes the view of this page
+  try { roomView = JSON.parse(s.view); } catch { roomView = null; }
+  applyRoomView();
+}
+
+function enterRoom(id, create) {
+  roomId = id;
+  roomView = null;
+  roomReady = false;
+  history.replaceState(null, "", `#room=${id}`);
+  $("roomLink").value = `${location.origin}${location.pathname}#room=${id}`;
+  $("roomBox").hidden = false;
+  $("share").hidden = true;
+  $("roomStatus").textContent = create ? "Making the room…" : "Coming into the room…";
+  room = joinRoom({
+    url: ROOM_URL, room: id, member: newId(9), name: roomName, secret: () => $("key").value.trim(), create,
+    onState, onConflict,
+    onError: (e) => {
+      if (["gone", "full", "exists"].includes(e.error)) exitRoom(e.message);
+      else if (e.op === "note") { noteDirty = true; $("noteStatus").textContent = e.message; }
+      else $("roomStatus").textContent = e.message || "The room gave an error.";
+    },
+  });
+  renderNote();
+}
+
+function exitRoom(message = "") {
+  room?.leave();
+  room = roomId = roomView = null;
+  roomViewBy = "";
+  roomReady = false;
+  roomNotes = new Map();
+  $("roomBox").hidden = true;
+  $("share").hidden = false;
+  $("roomNotes").replaceChildren();
+  $("roomStatus").textContent = message;
+  history.replaceState(null, "", selected ? `#${selected.layer}.${selected.index}` : location.pathname);
+  renderNote();
+}
+
+$("share").onclick = () => enterRoom(newId(16), true);
+$("leave").onclick = () => exitRoom("You left the room. The link still works for 3 days from when the room was made.");
+$("copyLink").onclick = async () => {
+  try { await navigator.clipboard.writeText($("roomLink").value); $("roomStatus").textContent = "The link is copied."; }
+  catch { $("roomLink").select(); }
+};
+addEventListener("hashchange", () => {
+  const id = roomOfHash(location.hash);
+  if (id && id !== roomId) { exitRoom(); enterRoom(id, false); }
+});
+addEventListener("pagehide", () => room?.leave());
+addEventListener("pageshow", (e) => { if (e.persisted && roomId) enterRoom(roomId, false); });
+
 // ---- start ----
 function idleLayers() {
   const points = snap.neurons.map((n) => ({ layer: n.layer, index: n.index, z: zOf(n.layer, n.index, n.max), mark: false }));
@@ -416,6 +601,8 @@ function idleLayers() {
 
 idleLayers();
 search();
+// A room link joins the room first, so that the room gives the view.
+if (roomOfHash(location.hash)) enterRoom(roomOfHash(location.hash), false);
 const hash = /^#(\d+)\.(\d+)$/.exec(location.hash);
 if (hash && +hash[1] < L && +hash[2] < F) select(+hash[1], +hash[2], false);
 else select(snap.neurons[0].layer, snap.neurons[0].index, false);
