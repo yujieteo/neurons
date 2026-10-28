@@ -1,5 +1,5 @@
 // The page: the snapshot of the sweep, the model in a worker, the layers,
-// steering, and Claude through the visitor's own OpenRouter key.
+// steering, the Jacobian lens, the swap, and Claude through the visitor's own OpenRouter key.
 import { createLayers } from "./art.mjs";
 import { createTokenizer } from "./tokenizer.mjs";
 
@@ -38,14 +38,23 @@ let live = null;               // { ids, pieces, record }
 let livePos = 0;
 let tokenizer = null, maxTokens = 128;
 let lastSteer = null;          // { prompt, value, base, steered } of the last Generate
+let busy = false;              // the worker runs a call of the page
 const per = L * F;
 const liveValue = (p, l, f) => live.record[p * per + l * F + f];
 
 const layers = createLayers($("layers"), L, (layer, index) => select(layer, index));
 
 // ---- the model ----
+// The model buttons: Run needs the model, Generate a neuron too, and the lens
+// and the swap also a run of your text.
+function buttons() {
+  $("run").disabled = busy || !tokenizer;
+  $("generate").disabled = busy || !tokenizer || !selected;
+  $("lens").disabled = $("swap").disabled = busy || !tokenizer || !selected || !live?.record;
+}
+
 const worker = new Worker(new URL("worker.mjs", import.meta.url), { type: "module" });
-let onToken = null, onDone = null, onFail = null;
+let onToken = null, onDone = null, onFail = null, onResult = null;
 worker.onmessage = ({ data }) => {
   if (data.type === "progress") {
     $("modelStatus").textContent = `Loading the model: ${(data.bytes / 1e6).toFixed(0)} of ${(data.total / 1e6).toFixed(0)} MB`;
@@ -54,22 +63,24 @@ worker.onmessage = ({ data }) => {
     maxTokens = data.maxTokens;
     $("modelStatus").textContent = `The model is ready. It runs in this tab, on the ${data.path === "gpu" ? "GPU (WebGPU)" : "CPU (WebAssembly)"}.`;
     $("load").hidden = true;
-    $("run").disabled = false;
-    $("generate").disabled = !selected;
+    buttons();
   } else if (data.type === "record") {
     live.record = data.record;
-    $("run").disabled = false;
+    busy = false;
+    buttons();
     pickToken(live.ids.length - 1);
   } else if (data.type === "token") {
     onToken?.(data.token);
   } else if (data.type === "done") {
     onDone?.();
+  } else if (data.type === "lens" || data.type === "swap") {
+    onResult?.(data);
   } else if (data.type === "error") {
     $("modelStatus").textContent = `Error: ${data.message}`;
     onFail?.();
     $("load").disabled = !!tokenizer;
-    $("run").disabled = !tokenizer;
-    $("generate").disabled = !tokenizer || !selected;
+    busy = false;
+    buttons();
   }
 };
 
@@ -83,7 +94,8 @@ $("run").onclick = () => {
   const ids = tokenizer.encode($("text").value).slice(0, maxTokens);
   if (!ids.length) return;
   live = { ids, pieces: ids.map((id) => tokenizer.decode([id])), record: null };
-  $("run").disabled = true;
+  busy = true;
+  buttons();
   worker.postMessage({ type: "run", ids });
 };
 
@@ -158,7 +170,7 @@ function select(layer, index, scroll = true) {
   renderNeuron();
   renderTokens();
   layers.select({ layer, index, z: live?.record ? zOf(layer, index, liveValue(livePos, layer, index)) : zOf(layer, index, largest(layer, index)) });
-  $("generate").disabled = !tokenizer;
+  buttons();
   const box = document.querySelector(".neuron").getBoundingClientRect();
   if (scroll && (box.top < 0 || box.top > innerHeight)) document.querySelector(".neuron").scrollIntoView({ block: "start" });
 }
@@ -185,6 +197,8 @@ function renderNeuron() {
       el("td", {}, el("b", { textContent: p }), document.createTextNode(snap.meta.baseline[i])))),
     ...n.steer.map((s) => el("tr", {}, el("td", { textContent: `${s.strength} × ${fmt(n.max)}` }),
       el("td", {}, el("b", { textContent: s.prompt }), document.createTextNode(s.text))))))] : []));
+  $("lensOut").replaceChildren();
+  $("swapOut").replaceChildren();
   updateSteerOut();
 }
 
@@ -211,14 +225,87 @@ $("generate").onclick = async () => {
   const prompt = $("steerPrompt").value;
   const ids = tokenizer.encode(prompt).slice(0, maxTokens);
   if (!ids.length) return;
-  $("generate").disabled = $("run").disabled = true;
+  busy = true;
+  buttons();
   $("genBase").textContent = $("genSteer").textContent = "";
   try {
     const base = await generate(ids, [], $("genBase"));
     const steered = await generate(ids, [{ layer, index, value }], $("genSteer"));
     lastSteer = { layer, index, prompt, value, base, steered };
-    $("generate").disabled = $("run").disabled = false;
+    busy = false;
+    buttons();
   } catch {}
+};
+
+// ---- the Jacobian lens and the swap ----
+// Posts a lens or swap call. Resolves with its result, or with null if the
+// selected neuron or token changed before it came.
+function probe(message) {
+  const at = `${selected.layer}.${selected.index}@${livePos}`;
+  busy = true;
+  buttons();
+  return new Promise((resolve) => {
+    onResult = (data) => {
+      busy = false;
+      buttons();
+      resolve(at === `${selected.layer}.${selected.index}@${livePos}` ? data : null);
+    };
+    onFail = () => resolve(null);
+    worker.postMessage(message);
+  });
+}
+
+// The indices of the n largest xs by key.
+const topBy = (xs, n, key) => Array.from(xs.keys()).sort((a, b) => key(xs[b]) - key(xs[a])).slice(0, n);
+
+function probabilities(logits) {
+  let mx = -Infinity, sum = 0;
+  for (const x of logits) mx = Math.max(mx, x);
+  const p = logits.map((x) => Math.exp(x - mx));
+  for (const x of p) sum += x;
+  return p.map((x) => x / sum);
+}
+
+const tokenRows = (ids, ...columns) => ids.map((id) => el("tr", {}, el("td", { textContent: `“${show(tokenizer.decode([id]))}”` }),
+  ...columns.map((c) => el("td", { textContent: c(id) }))));
+
+$("lens").onclick = async () => {
+  const { layer, index } = selected;
+  // The step: the neuron's standard deviation in the sweep (README, Lens and swap).
+  const h = std(layer, index) || 1;
+  const d = await probe({ type: "lens", ids: live.ids, pos: livePos, layer, index, h });
+  if (!d) return;
+  const column = (title, ids) => el("table", { className: "probe" },
+    el("thead", {}, el("tr", {}, el("th", { textContent: title }), el("th", { textContent: "∂ logit" }))),
+    el("tbody", {}, ...tokenRows(ids, (id) => fmt(d.dLogits[id], 3))));
+  const later = topBy(d.dNeurons.subarray((layer + 1) * F), 10, Math.abs).map((i) => i + (layer + 1) * F);
+  $("lensOut").replaceChildren(
+    el("p", { className: "hint", textContent: `At “${show(live.pieces[livePos])}” the neuron's value is ${fmt(d.value, 3)}. `
+      + `The derivatives are central differences with a step of ${fmt(h, 3)}, its standard deviation in the sweep.` }),
+    el("div", { className: "pair" }, column("Raises", topBy(d.dLogits, 8, (x) => x)), column("Lowers", topBy(d.dLogits, 8, (x) => -x))),
+    ...(later.length ? [el("h3", { textContent: "Later neurons it moves most" }),
+      el("ol", { className: "neuronlist" }, ...later.map((i) => neuronItem(Math.floor(i / F), i % F, `∂ ${fmt(d.dNeurons[i], 3)}`)))] : []));
+};
+
+$("swap").onclick = async () => {
+  const { layer, index } = selected;
+  const other = tokenizer.encode($("swapText").value).slice(0, maxTokens);
+  if (!other.length) return;
+  const d = await probe({ type: "swap", a: live.ids, pos: livePos, b: other, layer, index });
+  if (!d) return;
+  const table = (title, r) => {
+    const before = probabilities(r.logits), after = probabilities(r.swapped);
+    const ids = [...new Set([...topBy(before, 5, (x) => x), ...topBy(after, 5, (x) => x)])].sort((a, b) => after[b] - after[a]);
+    const pct = (p) => `${(100 * p).toFixed(1)} %`;
+    return el("table", { className: "probe" },
+      el("thead", {}, el("tr", {}, el("th", { textContent: title }), el("th", { textContent: "Before" }), el("th", { textContent: "After" }))),
+      el("tbody", {}, ...tokenRows(ids, (id) => pct(before[id]), (id) => pct(after[id]))));
+  };
+  $("swapOut").replaceChildren(
+    el("p", { className: "hint", textContent: `The value ${fmt(d.a.value, 3)} at “${show(live.pieces[livePos])}” of your text and `
+      + `the value ${fmt(d.b.value, 3)} at “${show(tokenizer.decode(other.slice(-1)))}” of the other text change places. `
+      + "The next-token probabilities before and after:" }),
+    el("div", { className: "pair" }, table("Your text", d.a), table("Other text", d.b)));
 };
 
 // ---- search ----

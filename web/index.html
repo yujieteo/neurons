@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Neurons</title>
-<meta name="description" content="Read and steer the MLP neurons of SmolLM2-135M in the browser. The model runs in Goose, compiled to WebAssembly.">
+<meta name="description" content="Read, steer, lens and swap the MLP neurons of SmolLM2-135M in the browser. The model runs in Goose, compiled to WebAssembly.">
 <link rel="icon" href="data:,">
 <link rel="preload" href="fonts/source-serif-4.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/dm-sans.woff2" as="font" type="font/woff2" crossorigin>
@@ -60,6 +60,18 @@
         <div><span class="kind">Steered</span><p id="genSteer" class="gen"></p></div>
       </div>
     </div>
+    <h3>Jacobian lens</h3>
+    <p class="hint">How much each next-token logit and each neuron of the later layers changes for each unit of
+      change of this neuron, at the selected token of your text.</p>
+    <button id="lens" disabled>Compute the lens</button>
+    <div id="lensOut"></div>
+    <h3>Swap</h3>
+    <p class="hint">This neuron's value at the selected token of your text and its value at the last token of the
+      other text change places. Then the model predicts the next token of each text.</p>
+    <label class="field" for="swapText">Other text</label>
+    <input id="swapText" value="The Colosseum is in Rome, the capital of">
+    <button id="swap" disabled>Swap</button>
+    <div id="swapOut"></div>
   </section>
 
   <section class="index" aria-labelledby="indexTitle">
