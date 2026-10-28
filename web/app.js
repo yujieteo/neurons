@@ -52,7 +52,7 @@ worker.onmessage = ({ data }) => {
   } else if (data.type === "ready") {
     tokenizer = createTokenizer(data.tokenizer);
     maxTokens = data.maxTokens;
-    $("modelStatus").textContent = "The model is ready. It runs in this tab.";
+    $("modelStatus").textContent = `The model is ready. It runs in this tab, on the ${data.path === "gpu" ? "GPU (WebGPU)" : "CPU (WebAssembly)"}.`;
     $("load").hidden = true;
     $("run").disabled = false;
     $("generate").disabled = !selected;

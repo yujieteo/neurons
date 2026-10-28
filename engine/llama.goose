@@ -254,16 +254,23 @@ fn mlp_neurons(layer: i64, nt: i64, start: i64) {
     }
 }
 
+// Whether tokens[0..nt] at positions start..start + nt fit the engine.
+fn fits(nt: i32, start: i32) -> bool {
+    if nt < 1 || nt > MAXT || start < 0 || start + nt > MAXCTX { return false; }
+    for t in 0..nt {
+        if tokens[t] < 0 || tokens[t] >= n_vocab { return false; }
+    }
+    return true;
+}
+
 // Runs tokens[0..nt] at positions start..start + nt, after the key-value
 // cache of the positions before start, with the weights w. Writes the
 // logits of the last token, and the neuron values when recording is on.
 // Returns 0 if the call does not fit.
 export fn forward(w: const f32[:], nt: i32, start: i32) -> i32 {
-    if n_layers == 0 || w.len < offset(10, 0) + dim { return 0; }
-    if nt < 1 || nt > MAXT || start < 0 || start + nt > MAXCTX { return 0; }
+    if n_layers == 0 || w.len < offset(10, 0) + dim || !fits(nt, start) { return 0; }
     for t in 0..nt {
         let tok = tokens[t] as i64;
-        if tok < 0 || tok >= n_vocab { return 0; }
         for i in 0..dim { x[t * dim + i] = w[tok * dim + i]; }
     }
     let kvd = kv_dim();
@@ -289,4 +296,27 @@ export fn forward(w: const f32[:], nt: i32, start: i32) -> i32 {
     rms_norm(xn, x[last..last + dim], w[offset(10, 0)..], 1);
     matmul(logits, xn, w, 1, n_vocab, dim);
     return 1;
+}
+
+// ---- the GPU path ----
+// engine/gpu.c runs forward on WebGPU with the kernels of engine/kernels.wgsl.
+// Its calls return at once, and the module calls Module.gpuDone(ok) when the
+// GPU has finished.
+
+extern fn gpu_init(w: const f32[:], cos_table: const f32[:], sin_table: const f32[:], vocab: i64, d: i64,
+                   f: i64, layers: i64, heads: i64, kv_heads: i64, eps: f32, max_ctx: i64, max_rec: i64) -> i32;
+extern fn gpu_forward(toks: const i32[:], nt: i64, start: i64, s_layer: const i32[:], s_index: const i32[:],
+                      s_value: const f32[:], n_s: i64, rec_on_: bool, out_logits: f32[:], out_rec: f32[:]) -> i32;
+
+// Copies the weights w to the GPU. Returns 0 if they do not fit the model.
+export fn init_gpu(w: const f32[:]) -> i32 {
+    if n_layers == 0 || w.len < offset(10, 0) + dim { return 0; }
+    return gpu_init(w, rope_cos, rope_sin, n_vocab, dim, ffn, n_layers, n_heads, n_kv, norm_eps, MAXCTX, MAXREC);
+}
+
+// forward on the GPU, with the weights of init_gpu. Returns 0 if the call
+// does not fit.
+export fn forward_gpu(nt: i32, start: i32) -> i32 {
+    if !fits(nt, start) { return 0; }
+    return gpu_forward(tokens, nt, start, steer_layer, steer_index, steer_value, n_steer, rec_on, logits, rec);
 }
