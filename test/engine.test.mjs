@@ -7,6 +7,7 @@ import process from "node:process";
 import createModule from "../web/engine.mjs";
 import { createEngine } from "../web/model.mjs";
 import { createTokenizer } from "../web/tokenizer.mjs";
+import { jacobianLens, neuronSwap } from "../web/probes.mjs";
 
 const root = new URL("../", import.meta.url);
 const expect = JSON.parse(readFileSync(new URL("test/fixture/tiny.json", root)));
@@ -23,6 +24,20 @@ function close(actual, wanted, what) {
   for (let i = 0; i < wanted.length; i++) worst = Math.max(worst, Math.abs(actual[i] - wanted[i]) / (1e-3 + Math.abs(wanted[i])));
   assert.ok(worst < 1e-3, `${what}: worst relative error ${worst}`);
 }
+
+const maxAbs = (xs) => xs.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+
+// max |actual - wanted| <= tol x max |wanted|, for differences of forward
+// calls, where small elements carry the error of the large ones.
+function closeScaled(actual, wanted, tol, what) {
+  assert.equal(actual.length, wanted.length, `${what}: length`);
+  let diff = 0;
+  for (let i = 0; i < wanted.length; i++) diff = Math.max(diff, Math.abs(actual[i] - wanted[i]));
+  assert.ok(diff <= tol * maxAbs(wanted), `${what}: max difference ${diff}, max ${maxAbs(wanted)}`);
+}
+
+// The step of the Jacobian lens in the tests.
+const LENS_STEP = 0.1;
 
 // The tolerance between the GPU and the CPU path (README, Tests): for each
 // compared tensor, the logits of a forward call and its neuron values,
@@ -116,6 +131,20 @@ for (const [path, engine] of Object.entries(engines)) {
     engine.setSteer([]);
   });
 
+  test(`${path}: the Jacobian lens against autograd`, { skip: !engine }, async () => {
+    const { pos, layer, index } = expect.lens;
+    const lens = await jacobianLens(engine, expect.prompt, pos, layer, index, LENS_STEP);
+    closeScaled(lens.dLogits, expect.lens_logits, 1e-3, "logits");
+    closeScaled(lens.dNeurons, expect.lens_neurons, 1e-3, "neurons");
+  });
+
+  test(`${path}: the neuron swap`, { skip: !engine }, async () => {
+    const { other, pos, layer, index } = expect.swap;
+    const swap = await neuronSwap(engine, expect.prompt, pos, other, layer, index);
+    close(swap.a.swapped, expect.swap_a, "logits of the text");
+    close(swap.b.swapped, expect.swap_b, "logits of the other text");
+  });
+
   test(`${path}: calls that do not fit are refused`, { skip: !engine }, async () => {
     await assert.rejects(engine.forward([expect.config.vocab_size], 0), /does not fit/);
     await assert.rejects(engine.forward([1], engine.maxContext()), /does not fit/);
@@ -128,6 +157,20 @@ if ("gpu" in engines) test("gpu: the same values as the cpu", { skip: !engines.g
   const calls = [[expect.prompt, 0], [expect.more, expect.prompt.length]];
   const worst = await gpuError(engines.cpu, engines.gpu, [{ steer: [], calls }, { steer: [expect.steer], calls }]);
   assert.ok(worst.logits <= TOLERANCE && worst.neurons <= TOLERANCE, JSON.stringify(worst));
+});
+
+// The lens and the swap are differences of forward calls. Each call is in
+// TOLERANCE, so a difference over step 2h is in TOLERANCE x max |value| / h.
+if ("gpu" in engines) test("gpu: the same lens and swap as the cpu", { skip: !engines.gpu }, async () => {
+  const run = (f) => Promise.all([f(engines.cpu), f(engines.gpu)]);
+  const { pos, layer, index } = expect.lens;
+  const [cpu, gpu] = await run((e) => jacobianLens(e, expect.prompt, pos, layer, index, LENS_STEP));
+  closeScaled(gpu.dLogits, cpu.dLogits, TOLERANCE * maxAbs(cpu.logits) / LENS_STEP / maxAbs(cpu.dLogits), "lens logits");
+  closeScaled(gpu.dNeurons, cpu.dNeurons, TOLERANCE * maxAbs(cpu.neurons) / LENS_STEP / maxAbs(cpu.dNeurons), "lens neurons");
+  const { other } = expect.swap;
+  const [cs, gs] = await run((e) => neuronSwap(e, expect.prompt, expect.swap.pos, other, expect.swap.layer, expect.swap.index));
+  closeScaled(gs.a.swapped, cs.a.swapped, TOLERANCE, "swap logits of the text");
+  closeScaled(gs.b.swapped, cs.b.swapped, TOLERANCE, "swap logits of the other text");
 });
 
 // SmolLM2-135M, where NEURONS_MODEL_DIR names a directory with its

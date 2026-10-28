@@ -1,10 +1,13 @@
 // The model in a worker, so that the page stays responsive while it runs.
 // Messages in: { type: "load" }, { type: "run", ids }, { type: "generate",
-// ids, steer, n }. Messages out: progress, ready, record, token, done, error.
+// ids, steer, n }, { type: "lens", ids, pos, layer, index, h }, { type:
+// "swap", a, pos, b, layer, index }. Messages out: progress, ready, record,
+// token, done, lens, swap, error.
 // The model runs on the GPU (WebGPU) if the browser has an adapter that
 // takes the weights, else on the CPU (WebAssembly).
 import createModule from "./engine.mjs";
 import { createEngine, MODEL_URL } from "./model.mjs";
+import { jacobianLens, neuronSwap } from "./probes.mjs";
 
 const CACHE = "neurons-smollm2-135m";
 let engine = null;
@@ -91,6 +94,12 @@ async function handle(data) {
         if (k + 1 < data.n) logits = await engine.forward([next], pos++);
       }
       postMessage({ type: "done" });
+    } else if (data.type === "lens") {
+      const { value, dLogits, dNeurons } = await jacobianLens(engine, data.ids, data.pos, data.layer, data.index, data.h);
+      postMessage({ type: "lens", value, dLogits, dNeurons }, [dLogits.buffer, dNeurons.buffer]);
+    } else if (data.type === "swap") {
+      const { a, b } = await neuronSwap(engine, data.a, data.pos, data.b, data.layer, data.index);
+      postMessage({ type: "swap", a, b });
     }
   } catch (e) {
     postMessage({ type: "error", message: String(e.message || e) });
