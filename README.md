@@ -18,6 +18,7 @@ The page ships that work as a snapshot, and it runs the model live:
 - Compute the Jacobian lens of a neuron at a token of your text: the next tokens and the later neurons that it moves most.
 - Swap a neuron between your text and another text, and compare the next-token probabilities.
 - Ask Claude about a neuron with your own OpenRouter key.
+- Share a link to a room, and explore with 1 to 4 other people at the same time.
 
 ## Run it
 
@@ -47,6 +48,80 @@ Thus each visitor puts an [OpenRouter](https://openrouter.ai/keys) key in the pa
 The browser sends the key only to `openrouter.ai`, and keeps it in `sessionStorage` of that tab.
 The key never goes to the server of the page or into this repository.
 Claude gets the neuron's statistics, its top contexts and steering samples, the visitor's text and the last steering result.
+
+## Rooms
+
+The "Share a link" button makes a room and gives a link to it. Each person who opens the link comes into the room, to a maximum of 5.
+In a room, all members see the same view and the same notes:
+
+- The view: the selected neuron, the text that ran, the selected token, and if the lens shows.
+  Each member runs the model in their own tab. A member who did not load the model sees the neuron and the text only.
+- The notes: one note on each neuron, to a maximum of 64 in a room. The page lists them under "Explore together".
+- The members: the name of each member who sent a request in the last 15 seconds.
+
+The rooms have no accounts. The link is the key: the id of the room has 128 random bits, after `#room=` in the link.
+The browser does not send the part after `#` in the URL of a request, so the page sends the id in the body of each request.
+A room ends 3 days after it was made. The relay keeps the rooms in memory only, and a restart of the relay ends all rooms.
+The OpenRouter key never goes into a room (Ask Claude): the page sends only the fields of the protocol, and it does not send a request that holds the visitor's key or text like an OpenRouter key.
+The relay also refuses a request that holds `sk-or-`.
+
+The relay is `neurons_room`, a Goose daemon in the [server repository](https://github.com/yujieteo/server) (`room/`).
+httpd on teoyujie.org sends `POST /play/neurons/room` to it with FastCGI.
+Thus `python3 -m http.server` gives the page without rooms.
+
+### Transport
+
+The page polls: one `POST` each second, with one request at a time.
+httpd in the OpenBSD base system cannot pass a WebSocket to a daemon, and a server-sent event stream or a long poll keeps one connection open for each member.
+A poll is a short FastCGI request, so the relay serves one request at a time, with no thread and no lock.
+A change comes to the other members in 1 to 2 seconds.
+
+### Conflicts
+
+- The view: the last view that comes to the relay wins. A view that the page did not send yet is newer than the view in a reply, so the page keeps its own view until the relay has it.
+- A note: a save sends the version of the note that the member saw (`base`). If the note changed after that version, the relay does not change it, and the reply is 409 with the notes as they are now.
+  The page then shows the other note, and keeps the member's text in the box. A second save replaces the other note.
+- The page does not change a note that its member edits when the note of the room changes or when another neuron is selected.
+
+### Protocol
+
+Each request is `POST room` (next to the page) with a JSON body of at most 8,192 bytes:
+
+| Field | In | Value |
+|---|---|---|
+| `op` | all | `create`, `poll`, `view`, `note` or `leave` |
+| `room` | all | the id of the room: 22 characters of base64url |
+| `member` | all | the id of the member in this tab: 8 to 16 characters of base64url, random |
+| `name` | all | the name of the member: 1 to 32 bytes, no control characters |
+| `since` | all | the `seq` of the last reply that had the view and the notes, or -1 |
+| `view` | `view` | the view as a JSON string of an object, at most 2,048 bytes: `{"layer", "index", "text", "token", "lens"}` |
+| `neuron`, `text`, `base` | `note` | the neuron as `layer.index`, the note (at most 500 bytes, empty to delete it), and the version of the note that the member saw (0 for no note) |
+
+`create` makes the room. Each other operation needs a room that exists.
+Each request also marks its member as present.
+The reply (200, and 409 for a note conflict) is the state of the room:
+
+```json
+{"seq": 7, "expires": 1793461540, "members": [{"name": "Ada", "you": true}, {"name": "Ben"}],
+ "view": "{\"layer\":16,\"index\":1275,\"text\":\"The cat\",\"token\":1,\"lens\":false}", "view_by": "Ben",
+ "notes": [{"neuron": "16.1275", "text": "Commas in lists", "by": "Ada", "version": 6}]}
+```
+
+`seq` goes up at each change of the view or a note. `view`, `view_by` and `notes` come only when `since` is less than `seq`.
+`expires` is the end of the room, in seconds since 1970. The reply names no member id, so a member cannot speak as another.
+An error has `{"error", "message"}`:
+
+| Status | `error` | When |
+|---|---|---|
+| 400 | `bad` | the request is not valid |
+| 400 | `key` | the request holds `sk-or-` |
+| 403 | `full` | the room has 5 members |
+| 403 | `notes` | the room has 64 notes |
+| 404 | `gone` | the room ended, or the id is wrong |
+| 409 | `exists` | `create` for a room that exists |
+| 413 | `big` | the body is more than 8,192 bytes |
+| 429 | `slow` | a rate limit: 600 requests in a minute from one address, 6 new rooms in an hour from one address, 600 requests or 120 views and notes in a minute in one room |
+| 503 | `rooms`, `busy` | the relay has 100 rooms, or counts for 4,096 addresses |
 
 ## Lens and swap
 
@@ -101,6 +176,7 @@ There are 1,536 neurons in each layer.
 | Loader | `web/model.mjs` | Streams the safetensors file into WebAssembly memory, copies it to the GPU on the GPU path, and calls the engine. |
 | Tokenizer | `web/tokenizer.mjs` | The byte-level BPE of SmolLM2. |
 | Lens and swap | `web/probes.mjs` | The Jacobian lens and the neuron swap, on the forward call of the engine. |
+| Rooms | `web/room.mjs` | The client of the room relay: the bodies of the requests, the key check, the polls, and the order of views and notes. |
 | Worker | `web/worker.mjs` | Runs the model off the main thread. It takes the GPU path when `navigator.gpu` gives an adapter that takes the weights, else the CPU path. |
 | Page | `web/index.html`, `web/app.js`, `web/art.mjs`, `web/style.css` | The look of [teoyujie.org](https://teoyujie.org): its fonts, its palette and its art of random walks beside the normal density. |
 | Sweep | `sweep/sweep.py`, `sweep/explore.py` | The local sweep, the choice of neurons, the label packs for Claude and the snapshot. |
@@ -152,6 +228,8 @@ nix shell nixpkgs#deno --command deno test --allow-read --allow-env test/engine.
   When `NEURONS_MODEL_DIR` names a directory with `config.json`, `tokenizer.json` and `model.safetensors` of SmolLM2-135M at the revision of `MODEL_URL` (`web/model.mjs`), `deno test` also compares the two paths on SmolLM2-135M: 6 prompts, each unsteered and with 2 steering cases. Without it, that test is skipped.
   In Deno, wgpu on an NVIDIA T1000 refuses a buffer of 64 MiB or more, so the SmolLM2-135M test ran on lavapipe (`VK_ICD_FILENAMES` set to the lavapipe ICD).
   Deno needs `libvulkan.so.1` on its library path to find a Vulkan adapter (on NixOS, from `nixpkgs#vulkan-loader`).
+- `test/room.test.mjs` runs the room client against a fake relay: the fields of each body, the key check, the order of a view and a reply, and a note conflict.
+  The tests of the relay itself are in the server repository.
 - `test/tokenizer.test.mjs` compares the tokenizer with the Hugging Face tokenizer on 9 texts (`test/make_tokens.py`). It downloads `tokenizer.json` from Hugging Face.
 
 CI runs `npm test`, and `deno test` on lavapipe (Mesa's Vulkan on the CPU), because the runner has no GPU.

@@ -37,15 +37,16 @@ main > section { border-top: 1px solid var(--ink); padding-top: 1.25rem; min-wid
 .layers { grid-column: 1 / -1; margin: 1rem 0 0; }
 .layers canvas { display: block; width: 100%; aspect-ratio: 5 / 2; cursor: pointer; }
 figcaption { font-size: 0.875rem; color: var(--muted); margin-top: 0.75rem; max-width: 52rem; }
-.run { grid-column: 1; grid-row: 2 / span 2; }
-.neuron { grid-column: 2; grid-row: 2; }
+.together { grid-column: 1 / -1; grid-row: 2; }
+.run { grid-column: 1; grid-row: 3 / span 2; }
+.neuron { grid-column: 2; grid-row: 3; }
 .index { grid-column: 1; }
 .ask { grid-column: 2; }
 .about { grid-column: 1 / -1; max-width: 46rem; }
 .about p { margin: 0 0 1rem; }
 @media (max-width: 52rem) {
   main { grid-template-columns: minmax(0, 1fr); }
-  .run, .neuron, .index, .ask { grid-column: 1; grid-row: auto; }
+  .together, .run, .neuron, .index, .ask { grid-column: 1; grid-row: auto; }
   .layers canvas { aspect-ratio: 4 / 3; }
 }
 
@@ -102,6 +103,9 @@ td b { font-weight: 500; }
 .gen { white-space: pre-wrap; margin: 0.25rem 0 0; min-height: 3rem; font-size: 0.95rem; }
 .probe { margin-top: 0.5rem; }
 .probe td:not(:first-child) { font: 0.8rem var(--mono); }
+.roomrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0.75rem; }
+.roomrow > div { flex: 1 1 18rem; max-width: 34rem; }
+.roomrow button { margin-bottom: 0.1rem; }
 .answer { margin-top: 1rem; }
 .answer p { margin: 0 0 0.75rem; white-space: pre-wrap; }
 
