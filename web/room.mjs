@@ -30,7 +30,8 @@ export function body(op, room, member, name, since, fields, secret) {
 
 // Joins room, or makes it first when create is true. The callbacks:
 // onState(state) after each reply, onConflict(neuron, text, state) when a note
-// changed before the save of this member came, and onError({ error, message }).
+// changed before the save of this member came, and onError({ error, message, op, fields })
+// with the fields of the operation that failed.
 // name() and secret() give the name of the member and the visitor's key now.
 export function joinRoom({ url, room, member, name, secret, create = false, onState, onConflict, onError,
   fetch = globalThis.fetch, interval = 1000 }) {
@@ -51,7 +52,7 @@ export function joinRoom({ url, room, member, name, secret, create = false, onSt
     else if (!create && notes.length) { op = "note"; fields = notes.shift(); }
     let text;
     try { text = body(op, room, member, name(), since, fields, secret()); } catch (e) {
-      onError({ error: "key", message: e.message, op });
+      onError({ error: "key", message: e.message, op, fields });
       schedule(op === "poll" || op === "create" ? interval : 0);
       return;
     }
@@ -77,7 +78,7 @@ export function joinRoom({ url, room, member, name, secret, create = false, onSt
       if (data.error === "conflict") onConflict(fields.neuron, fields.text, data);
       schedule(view !== null || notes.length ? 0 : interval);
     } else {
-      onError({ ...data, op });
+      onError({ ...data, op, fields });
       if (data.error === "gone" || data.error === "full" || data.error === "exists") stopped = true;
       else schedule(res.status === 429 ? 10 * interval : interval);
     }

@@ -444,8 +444,10 @@ function share() {
   if (!room || !roomReady || applying || !selected) return;
   // A page with no run keeps the text, the token and the lens of the room.
   const own = !!live?.record, v = roomView;
-  room.setView({ layer: selected.layer, index: selected.index, text: own ? live.text : v?.text ?? null,
-    token: own ? livePos : v?.token ?? null, lens: own ? lensShown : !!v?.lens });
+  // The view that this page sends is the view of the room until a reply comes.
+  roomView = { layer: selected.layer, index: selected.index, text: own ? live.text : v?.text ?? null,
+    token: own ? livePos : v?.token ?? null, lens: own ? lensShown : !!v?.lens };
+  room.setView(roomView);
 }
 
 // Makes the page show the view of the room, as far as it can now. The worker
@@ -531,11 +533,21 @@ function onConflict(neuron, text, s) {
   const theirs = s.notes.find((n) => n.neuron === neuron);
   const said = theirs ? `${theirs.by} changed this note before your save came. Their note: “${theirs.text}”.`
     : "Someone deleted this note before your save came.";
-  if (neuron !== noteFor) { $("roomStatus").textContent = `Your note on ${neuron} was not saved. ${said}`; return; }
+  keepNote(neuron, text, theirs?.version ?? 0, `${said} Your text is still in the box. Save again to put it in place of theirs.`);
+}
+
+// Keeps the text of a note that was not saved: in the box, or as a draft when
+// another neuron is selected now.
+function keepNote(neuron, text, base, message) {
+  if (neuron !== noteFor) {
+    if (!drafts.has(neuron)) drafts.set(neuron, { text, base });
+    $("roomStatus").textContent = `Your note on ${neuron} was not saved. ${message}`;
+    return;
+  }
   $("note").value = text;
   noteDirty = true;
-  noteBase = theirs?.version ?? 0;
-  $("noteStatus").textContent = `${said} Your text is still in the box. Save again to put it in place of theirs.`;
+  noteBase = base;
+  $("noteStatus").textContent = message;
 }
 
 function onState(s) {
@@ -569,7 +581,7 @@ function enterRoom(id, create) {
     onState, onConflict,
     onError: (e) => {
       if (["gone", "full", "exists"].includes(e.error)) exitRoom(e.message);
-      else if (e.op === "note") { noteDirty = true; $("noteStatus").textContent = e.message; }
+      else if (e.op === "note") keepNote(e.fields.neuron, e.fields.text, e.fields.base, e.message);
       else $("roomStatus").textContent = e.message || "The room gave an error.";
     },
   });
