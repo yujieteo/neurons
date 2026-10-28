@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neurons</title>
+<meta name="description" content="Read and steer the MLP neurons of SmolLM2-135M in the browser. The model runs in Goose, compiled to WebAssembly.">
+<link rel="icon" href="data:,">
+<link rel="preload" href="fonts/source-serif-4.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/dm-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="wrap">
+  <span class="kind">Experiment</span>
+  <h1>Neurons</h1>
+  <p class="lede">The <span id="nTotal">46,080</span> MLP neurons of SmolLM2-135M, swept over
+    <span id="nTokens">10 million</span> tokens. Claude explored <span id="nExplored">600</span> of them.
+    The model runs on this page, in <a href="https://github.com/aardappel/goose">Goose</a> compiled to WebAssembly.</p>
+</header>
+
+<main class="wrap">
+  <figure class="layers">
+    <canvas id="layers" aria-label="The 30 layers of the model with their neurons. Select a point to open its neuron."></canvas>
+    <figcaption id="layersCaption"></figcaption>
+  </figure>
+
+  <section class="run" aria-labelledby="runTitle">
+    <h2 id="runTitle">Your text</h2>
+    <p class="hint" id="modelStatus">The model is 269&nbsp;MB from Hugging Face. The browser keeps it after the first load.</p>
+    <button id="load">Load the model</button>
+    <label class="field" for="text">Text (the first 128 tokens run)</label>
+    <textarea id="text" rows="4">The Eiffel Tower is in Paris, the capital of France. It opened in 1889.</textarea>
+    <button id="run" disabled>Run</button>
+    <div id="tokens" class="tokens" aria-label="Tokens of your text. Select one to see its neurons."></div>
+    <h3 id="topTitle" hidden>Strongest neurons at <q id="topToken"></q></h3>
+    <ol id="top" class="neuronlist"></ol>
+  </section>
+
+  <section class="neuron" aria-live="polite">
+    <span class="kind" id="nId"></span>
+    <h2 id="nLabel"></h2>
+    <p id="nDesc"></p>
+    <p class="hint" id="nStats"></p>
+    <div id="nLive"></div>
+    <h3>Top contexts</h3>
+    <p class="hint">From the sweep. The colour of a token is the neuron's value on it.</p>
+    <ol id="nExamples" class="contexts"></ol>
+    <h3>Steering</h3>
+    <p class="hint">The neuron is set to a value at every position, and the model continues the prompt.</p>
+    <div id="nSteer"></div>
+    <div class="steer">
+      <label class="field" for="steerPrompt">Prompt</label>
+      <input id="steerPrompt" value="My favourite thing is">
+      <label class="field" for="steerValue">Value <output id="steerOut"></output></label>
+      <input id="steerValue" type="range" min="-2" max="3" step="0.1" value="1">
+      <button id="generate" disabled>Generate</button>
+      <div class="pair">
+        <div><span class="kind">Unsteered</span><p id="genBase" class="gen"></p></div>
+        <div><span class="kind">Steered</span><p id="genSteer" class="gen"></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="index" aria-labelledby="indexTitle">
+    <h2 id="indexTitle">Find a neuron</h2>
+    <label class="field" for="search">Search the labels, a neuron such as 16.1275, or a token that a neuron fires on</label>
+    <input id="search" type="search" placeholder="comma, French, 16.1275">
+    <ol id="results" class="neuronlist results"></ol>
+  </section>
+
+  <section class="ask" aria-labelledby="askTitle">
+    <h2 id="askTitle">Ask Claude</h2>
+    <p class="hint">Claude gets this neuron's contexts, steering samples and your text, then answers your question.
+      This page cannot ask Claude for you. Put your own <a href="https://openrouter.ai/keys">OpenRouter key</a> here.
+      The browser sends it only to openrouter.ai, and keeps it only in this tab until you close it.</p>
+    <label class="field" for="key">OpenRouter key</label>
+    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-or-…">
+    <label class="field" for="askModel">Model</label>
+    <select id="askModel">
+      <option value="anthropic/claude-sonnet-5.5">Claude Sonnet 5.5</option>
+      <option value="anthropic/claude-opus-5.5">Claude Opus 5.5</option>
+      <option value="anthropic/claude-haiku-5.5">Claude Haiku 5.5</option>
+    </select>
+    <label class="field" for="question">Question</label>
+    <textarea id="question" rows="3">What does this neuron detect, and what does it do to the text when it is steered?</textarea>
+    <button id="ask">Ask</button>
+    <div id="answer" class="answer"></div>
+  </section>
+
+  <section class="about">
+    <h2>How it works</h2>
+    <p>A neuron is one of the 1,536 values per layer between the up projection and the down projection of the
+      MLP: <code>silu(gate_proj(x)) × up_proj(x)</code>. The sweep ran the model over text from FineWeb-Edu and
+      Cosmopedia, and kept each neuron's mean, standard deviation and top contexts. Claude labelled the neurons
+      that stand out most in each layer, from their contexts and from text the model writes when they are steered.</p>
+    <p>The page fetches the weights from <a href="https://huggingface.co/HuggingFaceTB/SmolLM2-135M">Hugging Face</a>
+      and runs the forward pass in <code>engine/llama.goose</code>, compiled through C to WebAssembly.</p>
+    <p>Inspired by <a href="https://github.com/lyramakesmusic/neuron-explorer">lyramakesmusic/neuron-explorer</a>.
+      Source: <a href="https://github.com/yujieteo/neurons">github.com/yujieteo/neurons</a>.</p>
+  </section>
+</main>
+
+<footer class="wrap">
+  <a href="https://teoyujie.org/">teoyujie.org</a>
+</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
