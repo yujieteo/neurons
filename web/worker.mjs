@@ -1,6 +1,6 @@
 // The model in a worker, so that the page stays responsive while it runs.
 // Messages in: { type: "load" }, { type: "run", ids }, { type: "generate",
-// id, ids, steer, n }. Messages out: progress, ready, record, token, done, error.
+// ids, steer, n }. Messages out: progress, ready, record, token, done, error.
 import createModule from "./engine.mjs";
 import { createEngine, MODEL_URL } from "./model.mjs";
 
@@ -69,10 +69,10 @@ onmessage = async ({ data }) => {
       let pos = data.ids.length;
       for (let k = 0; k < data.n && pos < engine.maxContext(); k++) {
         const next = argmax(logits);
-        postMessage({ type: "token", id: data.id, token: next });
-        logits = engine.forward([next], pos++);
+        postMessage({ type: "token", token: next });
+        if (k + 1 < data.n) logits = engine.forward([next], pos++);
       }
-      postMessage({ type: "done", id: data.id });
+      postMessage({ type: "done" });
     }
   } catch (e) {
     postMessage({ type: "error", message: String(e.message || e) });

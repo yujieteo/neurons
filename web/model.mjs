@@ -22,8 +22,6 @@ function convert(dtype, src, dst) {
   if (dtype === "BF16") {
     const s = new Uint16Array(src.buffer, src.byteOffset, src.length >> 1);
     for (let i = 0; i < s.length; i++) dst[i] = s[i] << 16;
-  } else if (dtype === "F32") {
-    new Uint8Array(dst.buffer, dst.byteOffset, src.length).set(src);
   } else {
     throw new Error(`weights of type ${dtype} are not supported`);
   }

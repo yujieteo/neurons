@@ -45,7 +45,7 @@ const layers = createLayers($("layers"), L, (layer, index) => select(layer, inde
 
 // ---- the model ----
 const worker = new Worker(new URL("worker.mjs", import.meta.url), { type: "module" });
-let onToken = null, onDone = null;
+let onToken = null, onDone = null, onFail = null;
 worker.onmessage = ({ data }) => {
   if (data.type === "progress") {
     $("modelStatus").textContent = `Loading the model: ${(data.bytes / 1e6).toFixed(0)} of ${(data.total / 1e6).toFixed(0)} MB`;
@@ -66,7 +66,10 @@ worker.onmessage = ({ data }) => {
     onDone?.();
   } else if (data.type === "error") {
     $("modelStatus").textContent = `Error: ${data.message}`;
+    onFail?.();
+    $("load").disabled = !!tokenizer;
     $("run").disabled = !tokenizer;
+    $("generate").disabled = !tokenizer || !selected;
   }
 };
 
@@ -193,11 +196,12 @@ function updateSteerOut() {
 $("steerValue").oninput = updateSteerOut;
 
 function generate(ids, steer, out) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const got = [];
     onToken = (t) => { got.push(t); out.textContent = tokenizer.decode(got); };
     onDone = () => resolve(tokenizer.decode(got));
-    worker.postMessage({ type: "generate", id: 0, ids, steer, n: 32 });
+    onFail = reject;
+    worker.postMessage({ type: "generate", ids, steer, n: 32 });
   });
 }
 
@@ -209,10 +213,12 @@ $("generate").onclick = async () => {
   if (!ids.length) return;
   $("generate").disabled = $("run").disabled = true;
   $("genBase").textContent = $("genSteer").textContent = "";
-  const base = await generate(ids, [], $("genBase"));
-  const steered = await generate(ids, [{ layer, index, value }], $("genSteer"));
-  lastSteer = { layer, index, prompt, value, base, steered };
-  $("generate").disabled = $("run").disabled = false;
+  try {
+    const base = await generate(ids, [], $("genBase"));
+    const steered = await generate(ids, [{ layer, index, value }], $("genSteer"));
+    lastSteer = { layer, index, prompt, value, base, steered };
+    $("generate").disabled = $("run").disabled = false;
+  } catch {}
 };
 
 // ---- search ----
