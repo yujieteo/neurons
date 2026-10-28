@@ -28,7 +28,8 @@ function convert(dtype, src, dst) {
 }
 
 // With a WebGPU device, the engine runs forward on the GPU (engine/gpu.c);
-// without one, on the CPU in WebAssembly.
+// without one, or if the GPU fails to take the weights, on the CPU in
+// WebAssembly.
 export async function createEngine(createModule, device = null) {
   const m = await createModule(device ? { preinitializedWebGPUDevice: device } : {});
   m._goose_init(0, 0);
@@ -39,7 +40,7 @@ export async function createEngine(createModule, device = null) {
     const len = Number(new BigInt64Array(m.HEAPU8.buffer, lenPtr, 1)[0]);
     return new Type(m.HEAPU8.buffer, ptr, len / Type.BYTES_PER_ELEMENT);
   };
-  let weights = 0, nWeights = 0, config = null;
+  let weights = 0, nWeights = 0, config = null, gpu = device !== null;
   const weightSlice = () => {
     const dv = new DataView(m.HEAPU8.buffer, slicePtr, 12);
     dv.setUint32(0, weights, true);
@@ -74,16 +75,17 @@ export async function createEngine(createModule, device = null) {
         const count = shape.reduce((a, b) => a * b, 1);
         convert(dtype, bytes, new Uint32Array(m.HEAPU8.buffer, weights + 4 * off, count));
       });
-      if (device) await onGpu(() => m._init_gpu(weightSlice()), "the GPU path cannot take these weights");
+      if (gpu) gpu = await onGpu(() => m._init_gpu(weightSlice()), "the GPU path cannot take these weights").then(
+        () => true, (e) => { console.warn(`${e.message}: the model runs on the CPU`); return false; });
     },
     get config() { return config; },
-    path: device ? "gpu" : "cpu",
+    get path() { return gpu ? "gpu" : "cpu"; },
     maxTokens: () => m._max_tokens(),
     maxContext: () => m._max_context(),
     // Runs ids at positions start.. and returns the logits of the last one.
     async forward(ids, start) {
       new Int32Array(m.HEAPU8.buffer, m._buf_tokens(lenPtr), ids.length).set(ids);
-      if (device) await onGpu(() => m._forward_gpu(ids.length, start), "forward does not fit");
+      if (gpu) await onGpu(() => m._forward_gpu(ids.length, start), "forward does not fit");
       else if (!m._forward(weightSlice(), ids.length, start)) throw new Error("forward does not fit");
       return view(m._buf_logits, Float32Array).subarray(0, config.vocab_size);
     },

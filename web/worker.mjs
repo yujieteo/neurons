@@ -1,8 +1,8 @@
 // The model in a worker, so that the page stays responsive while it runs.
 // Messages in: { type: "load" }, { type: "run", ids }, { type: "generate",
 // ids, steer, n }. Messages out: progress, ready, record, token, done, error.
-// The model runs on the GPU (WebGPU) if the browser has an adapter, else on
-// the CPU (WebAssembly).
+// The model runs on the GPU (WebGPU) if the browser has an adapter that
+// takes the weights, else on the CPU (WebAssembly).
 import createModule from "./engine.mjs";
 import { createEngine, MODEL_URL } from "./model.mjs";
 

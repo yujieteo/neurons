@@ -3,8 +3,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import process from "node:process";
 import createModule from "../web/engine.mjs";
 import { createEngine } from "../web/model.mjs";
+import { createTokenizer } from "../web/tokenizer.mjs";
 
 const root = new URL("../", import.meta.url);
 const expect = JSON.parse(readFileSync(new URL("test/fixture/tiny.json", root)));
@@ -22,9 +24,43 @@ function close(actual, wanted, what) {
   assert.ok(worst < 1e-3, `${what}: worst relative error ${worst}`);
 }
 
-// The largest absolute difference between the GPU and the CPU path that the
-// tests accept, in the logits and in the neuron values (README, Tests).
-const TOLERANCE = 1e-4;
+// The tolerance between the GPU and the CPU path (README, Tests): for each
+// compared tensor, the logits of a forward call and its neuron values,
+// max |gpu - cpu| <= TOLERANCE x max |cpu|.
+const TOLERANCE = 1e-5;
+
+// Runs each case { steer, calls: [[ids, start], ...] } on the cpu and the gpu
+// engine. Returns the largest max |gpu - cpu| / max |cpu| of the logits and
+// of the neuron values.
+async function gpuError(cpu, gpu, cases) {
+  const worst = { logits: 0, neurons: 0 };
+  const compare = (what, a, b) => {
+    let diff = 0, size = 0;
+    for (let i = 0; i < a.length; i++) {
+      diff = Math.max(diff, Math.abs(a[i] - b[i]));
+      size = Math.max(size, Math.abs(a[i]));
+    }
+    worst[what] = Math.max(worst[what], diff && diff / size);
+  };
+  for (const { steer, calls } of cases) {
+    for (const [ids, start] of calls) {
+      const out = [];
+      for (const engine of [cpu, gpu]) {
+        engine.setSteer(steer);
+        engine.setRecord(true);
+        const logits = (await engine.forward(ids, start)).slice();
+        const stride = engine.config.num_hidden_layers * engine.config.intermediate_size;
+        const neurons = new Float32Array(ids.length * stride);
+        for (let p = 0; p < ids.length; p++) neurons.set(engine.neuronsAt(start + p), p * stride);
+        engine.setSteer([]);
+        out.push({ logits, neurons });
+      }
+      compare("logits", out[0].logits, out[1].logits);
+      compare("neurons", out[0].neurons, out[1].neurons);
+    }
+  }
+  return worst;
+}
 
 // The CPU path always; the GPU path where the runtime has WebGPU (Deno, not
 // Node). With WebGPU but no adapter, the GPU tests fail rather than skip.
@@ -49,7 +85,10 @@ for (const [path, engine] of Object.entries(engines)) {
     return out;
   };
 
-  if (path === "gpu") test("gpu: a WebGPU adapter", () => assert.ok(engine, "no WebGPU adapter"));
+  if (path === "gpu") test("gpu: a WebGPU adapter that takes the weights", () => {
+    assert.ok(engine, "no WebGPU adapter");
+    assert.equal(engine.path, "gpu");
+  });
 
   test(`${path}: logits and neuron values of a prompt`, { skip: !engine }, async () => {
     engine.setSteer([]);
@@ -84,27 +123,45 @@ for (const [path, engine] of Object.entries(engines)) {
   });
 }
 
-// The fixed prompts of the fixture, unsteered and steered: the largest
-// absolute difference between the paths, in the logits and the neuron values.
+// The prompts of the fixture, unsteered and steered.
 if ("gpu" in engines) test("gpu: the same values as the cpu", { skip: !engines.gpu }, async () => {
-  const worst = { logits: 0, neurons: 0 };
-  const diff = (what, a, b) => {
-    for (let i = 0; i < a.length; i++) worst[what] = Math.max(worst[what], Math.abs(a[i] - b[i]));
-  };
-  for (const steer of [[], [expect.steer]]) {
-    const runs = [];
-    for (const engine of [engines.cpu, engines.gpu]) {
-      engine.setSteer(steer);
-      engine.setRecord(true);
-      const logits = [(await engine.forward(expect.prompt, 0)).slice()];
-      logits.push((await engine.forward(expect.more, expect.prompt.length)).slice());
-      const neurons = [];
-      for (let p = 0; p < expect.prompt.length + expect.more.length; p++) neurons.push(engine.neuronsAt(p));
-      runs.push({ logits, neurons });
-      engine.setSteer([]);
-    }
-    runs[0].logits.forEach((l, i) => diff("logits", l, runs[1].logits[i]));
-    runs[0].neurons.forEach((n, i) => diff("neurons", n, runs[1].neurons[i]));
+  const calls = [[expect.prompt, 0], [expect.more, expect.prompt.length]];
+  const worst = await gpuError(engines.cpu, engines.gpu, [{ steer: [], calls }, { steer: [expect.steer], calls }]);
+  assert.ok(worst.logits <= TOLERANCE && worst.neurons <= TOLERANCE, JSON.stringify(worst));
+});
+
+// SmolLM2-135M, where NEURONS_MODEL_DIR names a directory with its
+// config.json, tokenizer.json and model.safetensors (the revision of
+// MODEL_URL in web/model.mjs): 6 prompts, each unsteered and with 2 steering
+// cases, and one more token after each.
+const modelDir = process.env.NEURONS_MODEL_DIR;
+if ("gpu" in engines) test("gpu: the same values as the cpu on SmolLM2-135M", { skip: !engines.gpu || !modelDir }, async () => {
+  const file = (name) => readFileSync(`${modelDir}/${name}`);
+  const config = JSON.parse(file("config.json"));
+  const tokenizer = createTokenizer(JSON.parse(file("tokenizer.json")));
+  const bytes = file("model.safetensors");
+  async function* weights() {
+    for (let i = 0; i < bytes.length; i += 1 << 24) yield bytes.subarray(i, i + (1 << 24));
   }
+  const cpu = await createEngine(createModule);
+  await cpu.load(config, weights());
+  const gpu = await createEngine(createModule, await (await navigator.gpu.requestAdapter()).requestDevice());
+  await gpu.load(config, weights());
+  assert.equal(gpu.path, "gpu");
+  const prompts = [
+    "The capital of France is Paris, and the capital of Germany is",
+    "def fibonacci(n):\n    if n < 2:\n        return n\n    return",
+    "Photosynthesis is the process by which green plants use sunlight to",
+    "In 1969, Neil Armstrong became the first person to walk on the",
+    "Once upon a time, in a small village by the sea, there lived an old fisherman who",
+    "The quick brown fox jumps over the lazy dog. ".repeat(12),
+  ];
+  const steers = [[], [{ layer: 10, index: 100, value: 8 }], [{ layer: 3, index: 7, value: -5 }, { layer: 25, index: 1000, value: 12 }]];
+  const cases = [];
+  for (const text of prompts) {
+    const ids = tokenizer.encode(text).slice(0, 127);
+    for (const steer of steers) cases.push({ steer, calls: [[ids, 0], [ids.slice(0, 1), ids.length]] });
+  }
+  const worst = await gpuError(cpu, gpu, cases);
   assert.ok(worst.logits <= TOLERANCE && worst.neurons <= TOLERANCE, JSON.stringify(worst));
 });
