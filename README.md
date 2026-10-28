@@ -1,6 +1,9 @@
 # neurons
 
 A neuron explorer for SmolLM2-135M that runs in the web browser, written in Goose and compiled to WebAssembly.
+The model runs on the GPU with WebGPU when the browser has a WebGPU adapter, and on the CPU in WebAssembly when it does not.
+If the GPU cannot take the weights, the model runs on the CPU.
+The page shows which path runs.
 
 Inspired by [lyramakesmusic/neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer).
 
@@ -33,6 +36,7 @@ The repository has the built `web/engine.wasm` and the snapshot, so the page nee
 The page downloads the model only when you click "Load the model".
 The worker keeps the files in the Cache API, so a second visit does not download them again.
 The weights are bf16 in the file. The worker converts them to f32 in WebAssembly memory (538 MB).
+On the GPU path, the worker also copies them to GPU memory (538 MB).
 
 ## Ask Claude
 
@@ -50,10 +54,11 @@ There are 1,536 neurons in each layer.
 | Part | File | What it does |
 |---|---|---|
 | Engine | `engine/llama.goose` | The forward pass of a Llama-family model with tied embeddings: RMS norm, rotary embedding, grouped-query attention with a key-value cache, the SiLU MLP. It records the neuron values and sets steered neurons. |
-| Build | `build.sh` | Goose to C (`gen/llama.c`, `gen/llama.h`), then Emscripten to `web/engine.mjs` and `web/engine.wasm`. |
-| Loader | `web/model.mjs` | Streams the safetensors file into WebAssembly memory, and calls the engine. |
+| GPU path | `engine/gpu.c`, `engine/kernels.wgsl` | The same forward pass on WebGPU, through the WebGPU port of Emscripten (emdawnwebgpu), with WGSL kernels. The Goose engine checks each call and gives its tokens, steered neurons and buffers to `engine/gpu.c`. |
+| Build | `build.sh` | Goose to C (`gen/llama.c`, `gen/llama.h`), then Emscripten to `web/engine.mjs` and `web/engine.wasm` from that C and `engine/gpu.c`. |
+| Loader | `web/model.mjs` | Streams the safetensors file into WebAssembly memory, copies it to the GPU on the GPU path, and calls the engine. |
 | Tokenizer | `web/tokenizer.mjs` | The byte-level BPE of SmolLM2. |
-| Worker | `web/worker.mjs` | Runs the model off the main thread. |
+| Worker | `web/worker.mjs` | Runs the model off the main thread. It takes the GPU path when `navigator.gpu` gives an adapter that takes the weights, else the CPU path. |
 | Page | `web/index.html`, `web/app.js`, `web/art.mjs`, `web/style.css` | The look of [teoyujie.org](https://teoyujie.org): its fonts, its palette and its art of random walks beside the normal density. |
 | Sweep | `sweep/sweep.py`, `sweep/explore.py` | The local sweep, the choice of neurons, the label packs for Claude and the snapshot. |
 | Snapshot | `web/snapshot/explored.json`, `web/snapshot/neurons.bin` | The explored neurons, and the statistics of all neurons. |
@@ -85,20 +90,36 @@ git -C ../goose checkout a108677d300cb0e8bbb842c35a353abe67a20c6c
 GOOSE_STDLIB=$PWD/../goose/stdlib nix shell nixpkgs#emscripten --command env GOOSE=$PWD/../goose/build/goose ./build.sh
 ```
 
-The build used Emscripten 5.0.6.
+The build used Emscripten 5.0.6. On the first build, Emscripten downloads its WebGPU port (emdawnwebgpu).
 `build.sh` writes `gen/sha256sums`, and the tests check the sums, so a stale C or wasm fails the tests.
 
 ## Tests
 
 ```sh
 nix shell nixpkgs#nodejs --command npm test
+nix shell nixpkgs#deno --command deno test --allow-read --allow-env test/engine.test.mjs
 ```
 
 - `test/engine.test.mjs` runs a tiny random Llama model in the wasm engine and compares it with transformers in f32: the logits, the neuron values, the key-value cache and a steered neuron. `test/make_fixture.py` makes the model.
+  Node has no WebGPU, so `npm test` runs the CPU path only.
+  Deno has WebGPU, so `deno test` runs the CPU path and the GPU path. It also compares the two paths on the prompts of the fixture, unsteered and steered. With WebGPU but no adapter, the GPU tests fail.
+  The tolerance between the two paths: for each compared tensor (the logits of a forward call, and its neuron values), max |gpu - cpu| <= 1e-5 x max |cpu|.
+  When `NEURONS_MODEL_DIR` names a directory with `config.json`, `tokenizer.json` and `model.safetensors` of SmolLM2-135M at the revision of `MODEL_URL` (`web/model.mjs`), `deno test` also compares the two paths on SmolLM2-135M: 6 prompts, each unsteered and with 2 steering cases. Without it, that test is skipped.
+  In Deno, wgpu on an NVIDIA T1000 refuses a buffer of 64 MiB or more, so the SmolLM2-135M test ran on lavapipe (`VK_ICD_FILENAMES` set to the lavapipe ICD).
+  Deno needs `libvulkan.so.1` on its library path to find a Vulkan adapter (on NixOS, from `nixpkgs#vulkan-loader`).
 - `test/tokenizer.test.mjs` compares the tokenizer with the Hugging Face tokenizer on 9 texts (`test/make_tokens.py`). It downloads `tokenizer.json` from Hugging Face.
+
+CI runs `npm test`, and `deno test` on lavapipe (Mesa's Vulkan on the CPU), because the runner has no GPU.
+Thus CI checks the WGSL kernels on one Vulkan implementation. It does not run a real GPU, a browser or SmolLM2-135M.
 
 On SmolLM2-135M, the largest difference from transformers was 3e-5 in the logits and 7e-5 in the neuron values.
 In Node, one new token took 52 ms.
+
+The GPU path against the CPU path on SmolLM2-135M, in Chromium 156 on an NVIDIA T1000, over 6 prompts of up to 128 tokens with 3 steering cases each:
+
+- The largest difference was 7e-5 in the logits (the largest logit was 29, so 2.4e-6 relative) and 6e-3 in the neuron values (the largest value was 2,626, so 2.3e-6 relative). Both are in the tolerance of 1e-5 relative.
+- The greedy tokens were the same: 288 of 288, 16 after each prompt.
+- One new token took 9 ms on the GPU path and 35 ms on the CPU path. A prompt with the neuron values recorded took 77 ms and 755 ms.
 
 ## Sweep
 

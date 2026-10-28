@@ -11,3 +11,13 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+  # The GPU path on lavapipe, Mesa's Vulkan on the CPU: the runner has no GPU.
+  gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.8.x
+      - run: deno test --allow-read --allow-env test/engine.test.mjs

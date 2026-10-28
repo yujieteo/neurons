@@ -27,8 +27,11 @@ function convert(dtype, src, dst) {
   }
 }
 
-export async function createEngine(createModule) {
-  const m = await createModule();
+// With a WebGPU device, the engine runs forward on the GPU (engine/gpu.c);
+// without one, or if the GPU fails to take the weights, on the CPU in
+// WebAssembly.
+export async function createEngine(createModule, device = null) {
+  const m = await createModule(device ? { preinitializedWebGPUDevice: device } : {});
   m._goose_init(0, 0);
   const lenPtr = m._malloc(8);
   const slicePtr = m._malloc(12);   // sl_f32 of gen/llama.h: packed { float *data; int64_t len; }
@@ -37,7 +40,19 @@ export async function createEngine(createModule) {
     const len = Number(new BigInt64Array(m.HEAPU8.buffer, lenPtr, 1)[0]);
     return new Type(m.HEAPU8.buffer, ptr, len / Type.BYTES_PER_ELEMENT);
   };
-  let weights = 0, nWeights = 0, config = null;
+  let weights = 0, nWeights = 0, config = null, gpu = device !== null;
+  const weightSlice = () => {
+    const dv = new DataView(m.HEAPU8.buffer, slicePtr, 12);
+    dv.setUint32(0, weights, true);
+    dv.setBigInt64(4, BigInt(nWeights), true);
+    return slicePtr;
+  };
+  // Starts a GPU call, and waits for the GPU to finish it. refused is the
+  // error if the engine refuses the call.
+  const onGpu = (start, refused) => new Promise((resolve, reject) => {
+    m.gpuDone = (ok) => (ok ? resolve() : reject(new Error("the GPU failed")));
+    if (!start()) reject(new Error(refused));
+  });
 
   return {
     // Reads a safetensors file from a stream of Uint8Array chunks into the
@@ -60,17 +75,18 @@ export async function createEngine(createModule) {
         const count = shape.reduce((a, b) => a * b, 1);
         convert(dtype, bytes, new Uint32Array(m.HEAPU8.buffer, weights + 4 * off, count));
       });
+      if (gpu) gpu = await onGpu(() => m._init_gpu(weightSlice()), "the GPU path cannot take these weights").then(
+        () => true, (e) => { console.warn(`${e.message}: the model runs on the CPU`); return false; });
     },
     get config() { return config; },
+    get path() { return gpu ? "gpu" : "cpu"; },
     maxTokens: () => m._max_tokens(),
     maxContext: () => m._max_context(),
     // Runs ids at positions start.. and returns the logits of the last one.
-    forward(ids, start) {
+    async forward(ids, start) {
       new Int32Array(m.HEAPU8.buffer, m._buf_tokens(lenPtr), ids.length).set(ids);
-      const dv = new DataView(m.HEAPU8.buffer, slicePtr, 12);
-      dv.setUint32(0, weights, true);
-      dv.setBigInt64(4, BigInt(nWeights), true);
-      if (!m._forward(slicePtr, ids.length, start)) throw new Error("forward does not fit");
+      if (gpu) await onGpu(() => m._forward_gpu(ids.length, start), "forward does not fit");
+      else if (!m._forward(weightSlice(), ids.length, start)) throw new Error("forward does not fit");
       return view(m._buf_logits, Float32Array).subarray(0, config.vocab_size);
     },
     setRecord: (on) => m._set_record(on ? 1 : 0),

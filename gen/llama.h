@@ -32,6 +32,8 @@ typedef struct { uint8_t *data; int64_t len; } sl_u8;
 
 typedef struct { float *data; int64_t len; } sl_f32;
 
+typedef struct { int32_t *data; int64_t len; } sl_i32;
+
 typedef struct ByteSet_g ByteSet_g;
 typedef struct { uint8_t e[256]; } a256_b;
 
@@ -65,6 +67,8 @@ void set_record(int32_t gs_export_arg0_3);
 void clear_steer(void);
 int32_t add_steer(int32_t gs_export_arg0_4, int32_t gs_export_arg1_3, double gs_export_arg2_2);
 int32_t forward(sl_f32 gs_export_arg0_5, int32_t gs_export_arg1_4, int32_t gs_export_arg2_3);
+int32_t init_gpu(sl_f32 gs_export_arg0_6);
+int32_t forward_gpu(int32_t gs_export_arg0_7, int32_t gs_export_arg1_5);
 #ifdef __cplusplus
 }
 #endif
