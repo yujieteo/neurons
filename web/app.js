@@ -97,15 +97,21 @@ $("load").onclick = () => {
   worker.postMessage({ type: "load" });
 };
 
-function runText() {
-  const text = $("text").value, ids = tokenizer.encode(text).slice(0, maxTokens);
+// The text that ran goes into the view of the room, so it stays within the
+// 2,048 bytes of a view (README.md, Protocol), with 100 bytes for the other fields.
+const fitsView = (text) => new TextEncoder().encode(JSON.stringify(text)).length <= 1948;
+
+// text: the text of the room, or null for the text in the box.
+function runText(text = null) {
+  const ids = tokenizer.encode(text ?? $("text").value).slice(0, maxTokens);
+  if (text === null) while (ids.length && !fitsView(tokenizer.decode(ids))) ids.pop();
   if (!ids.length) return;
-  live = { text, ids, pieces: ids.map((id) => tokenizer.decode([id])), record: null };
+  live = { text: text ?? tokenizer.decode(ids), ids, pieces: ids.map((id) => tokenizer.decode([id])), record: null };
   busy = true;
   buttons();
   worker.postMessage({ type: "run", ids });
 }
-$("run").onclick = runText;
+$("run").onclick = () => runText();
 
 // ---- your text ----
 function pickToken(p) {
@@ -426,16 +432,20 @@ let room = null, roomId = null;
 let roomReady = false;         // the first reply of the room came
 let roomView = null;           // the view of the room, as the relay last gave it
 let roomViewBy = "";           // the member who sent that view
+let roomText = null;           // the text of the room that the page last put in the box
 let roomNotes = new Map();     // "layer.index" -> { neuron, text, by, version }
 let applying = false;          // the page applies the view of the room: it does not send it back
 let runFromRoom = false;       // the run in the worker is for the view of the room
 let lensShown = false;         // the lens of the selected neuron and token is on the page
 let noteFor = null, noteBase = 0, noteDirty = false;
+const drafts = new Map();      // "layer.index" -> { text, base } of a note that the member did not save
 
 function share() {
   if (!room || !roomReady || applying || !selected) return;
-  room.setView({ layer: selected.layer, index: selected.index, text: live?.text ?? null,
-    token: live?.record ? livePos : null, lens: lensShown });
+  // A page with no run keeps the text, the token and the lens of the room.
+  const own = !!live?.record, v = roomView;
+  room.setView({ layer: selected.layer, index: selected.index, text: own ? live.text : v?.text ?? null,
+    token: own ? livePos : v?.token ?? null, lens: own ? lensShown : !!v?.lens });
 }
 
 // Makes the page show the view of the room, as far as it can now. The worker
@@ -449,8 +459,8 @@ function applyRoomView() {
     if (ok(v.layer, L) && ok(v.index, F) && (selected?.layer !== v.layer || selected?.index !== v.index)) select(v.layer, v.index, false);
     if (typeof v.text !== "string") return;
     if (live?.text !== v.text) {
-      $("text").value = v.text;
-      if (tokenizer && !busy) { runFromRoom = true; runText(); }
+      if (roomText !== v.text) { roomText = v.text; $("text").value = v.text; }
+      if (tokenizer && !busy) { runFromRoom = true; runText(v.text); }
       return;
     }
     if (!live.record) return;
@@ -494,7 +504,15 @@ function renderNote() {
   $("noteBox").hidden = !room || !selected;
   if ($("noteBox").hidden) return;
   const key = `${selected.layer}.${selected.index}`, n = roomNotes.get(key);
-  if (noteFor !== key) { noteFor = key; noteDirty = false; $("noteStatus").textContent = ""; }
+  if (noteFor !== key) {
+    if (noteDirty) drafts.set(noteFor, { text: $("note").value, base: noteBase });
+    const d = drafts.get(key);
+    drafts.delete(key);
+    noteFor = key;
+    noteDirty = !!d;
+    $("noteStatus").textContent = d ? "Your note is not saved." : "";
+    if (d) { $("note").value = d.text; noteBase = d.base; }
+  }
   if (noteDirty) return;
   $("note").value = n?.text ?? "";
   noteBase = n?.version ?? 0;
@@ -539,7 +557,7 @@ function onState(s) {
 
 function enterRoom(id, create) {
   roomId = id;
-  roomView = null;
+  roomView = roomText = null;
   roomReady = false;
   history.replaceState(null, "", `#room=${id}`);
   $("roomLink").value = `${location.origin}${location.pathname}#room=${id}`;
@@ -564,6 +582,9 @@ function exitRoom(message = "") {
   roomViewBy = "";
   roomReady = false;
   roomNotes = new Map();
+  drafts.clear();
+  noteFor = null;
+  noteDirty = false;
   $("roomBox").hidden = true;
   $("share").hidden = false;
   $("roomNotes").replaceChildren();

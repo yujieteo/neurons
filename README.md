@@ -81,7 +81,7 @@ A change comes to the other members in 1 to 2 seconds.
 - The view: the last view that comes to the relay wins. A view that the page did not send yet is newer than the view in a reply, so the page keeps its own view until the relay has it.
 - A note: a save sends the version of the note that the member saw (`base`). If the note changed after that version, the relay does not change it, and the reply is 409 with the notes as they are now.
   The page then shows the other note, and keeps the member's text in the box. A second save replaces the other note.
-- The page does not change a note that its member edits when the note of the room changes.
+- The page does not change a note that its member edits when the note of the room changes or when another neuron is selected.
 
 ### Protocol
 
@@ -120,7 +120,7 @@ An error has `{"error", "message"}`:
 | 404 | `gone` | the room ended, or the id is wrong |
 | 409 | `exists` | `create` for a room that exists |
 | 413 | `big` | the body is more than 8,192 bytes |
-| 429 | `slow` | a rate limit: 240 requests in a minute from one address, 6 new rooms in an hour from one address, 600 requests or 120 views and notes in a minute in one room |
+| 429 | `slow` | a rate limit: 600 requests in a minute from one address, 6 new rooms in an hour from one address, 600 requests or 120 views and notes in a minute in one room |
 | 503 | `rooms`, `busy` | the relay has 100 rooms, or counts for 4,096 addresses |
 
 ## Lens and swap
