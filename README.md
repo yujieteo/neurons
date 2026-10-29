@@ -178,7 +178,7 @@ There are 1,536 neurons in each layer.
 | Lens and swap | `web/probes.mjs` | The Jacobian lens and the neuron swap, on the forward call of the engine. |
 | Rooms | `web/room.mjs` | The client of the room relay: the bodies of the requests, the key check, the polls, and the order of views and notes. |
 | Worker | `web/worker.mjs` | Runs the model off the main thread. It takes the GPU path when `navigator.gpu` gives an adapter that takes the weights, else the CPU path. |
-| Page | `web/index.html`, `web/app.js`, `web/art.mjs`, `web/style.css` | The look of [teoyujie.org](https://teoyujie.org): its fonts, its palette and its art of random walks beside the normal density. |
+| Page | `web/index.html`, `web/app.js`, `web/art.mjs`, `web/style.css` | The look of [teoyujie.org](https://teoyujie.org): its shared stylesheet `https://teoyujie.org/shared/kowalski.css` and its art of random walks beside the normal density. |
 | Sweep | `sweep/sweep.py`, `sweep/explore.py` | The local sweep, the choice of neurons, the label packs for Claude and the snapshot. |
 | Snapshot | `web/snapshot/explored.json`, `web/snapshot/neurons.bin` | The explored neurons, and the statistics of all neurons. |
 
@@ -269,5 +269,4 @@ The corpus was the first shard of `fineweb-edu-dedup` (70 %) and of `cosmopedia-
 MIT (see `LICENSE`), for the code of this repository.
 SmolLM2-135M is Apache-2.0. The repository does not include the weights.
 Goose is Apache-2.0. The generated `gen/llama.c` and `web/engine.wasm` contain the Goose runtime, so `web/GOOSE-LICENSE.txt` has the Goose licence.
-The fonts in `web/fonts/` are under the SIL Open Font License (the `-OFL.txt` files).
 The contexts in the snapshot are short extracts of FineWeb-Edu (ODC-By) and Cosmopedia (Apache-2.0).
