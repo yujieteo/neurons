@@ -11,127 +11,150 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="wrap">
-  <span class="kind">Experiment</span>
+<header class="column top">
+  <a href="https://teoyujie.org/">Yu Jie Teo</a>
   <h1>Neurons</h1>
-  <p class="lede">The <span id="nTotal">46,080</span> MLP neurons of SmolLM2-135M, swept over
-    <span id="nTokens">10 million</span> tokens. Claude explored <span id="nExplored">600</span> of them.
-    The model runs on this page, in <a href="https://github.com/aardappel/goose">Goose</a> compiled to WebAssembly.</p>
 </header>
 
-<main class="wrap">
-  <figure class="layers">
-    <canvas id="layers" aria-label="The 30 layers of the model with their neurons. Select a point to open its neuron."></canvas>
-    <figcaption id="layersCaption"></figcaption>
+<main class="column">
+  <p>The <span id="nTotal">46,080</span> MLP neurons of SmolLM2-135M, swept over
+    <span id="nTokens">10 million</span> tokens. Claude explored <span id="nExplored">600</span> of them.
+    The model runs on this page, in <a href="https://github.com/aardappel/goose">Goose</a> compiled to WebAssembly.</p>
+
+  <figure class="framed">
+    <div class="box"><canvas id="layers" aria-label="The 30 layers of the model with their neurons. Select a point to open its neuron."></canvas></div>
+    <figcaption id="layersCaption" class="caption"></figcaption>
   </figure>
 
-  <section class="together" aria-labelledby="togetherTitle">
-    <h2 id="togetherTitle">Explore together</h2>
-    <p class="hint">A share link opens a room for 2 to 5 people. In the room, all see the same neuron, text, token
+  <section aria-labelledby="together">
+    <h2 id="together"><a href="#together">Explore together</a></h2>
+    <p>A share link opens a room for 2 to 5 people. In the room, all see the same neuron, text, token
       and lens, and the same notes on neurons. Anyone with the link can come in, so share it only with your group.
       The room ends after 3 days. Your OpenRouter key stays in this tab and never goes to the room.</p>
-    <div class="roomrow">
-      <div><label class="field" for="roomName">Your name in the room</label>
-        <input id="roomName" maxlength="32" autocomplete="nickname"></div>
-      <button class="button" id="share">Share a link</button>
-    </div>
-    <div id="roomBox" hidden>
-      <div class="roomrow">
-        <div><label class="field" for="roomLink">Link to the room</label>
-          <input id="roomLink" readonly></div>
-        <button class="button" id="copyLink">Copy</button>
-        <button class="button" id="leave">Leave the room</button>
+    <div class="framed box panel">
+      <div class="row">
+        <div><label class="field" for="roomName">Your name in the room</label>
+          <input id="roomName" maxlength="32" autocomplete="nickname"></div>
+        <button class="button" id="share">Share a link</button>
       </div>
-      <p id="roomPeople" class="hint"></p>
-      <h3 id="roomNotesTitle" hidden>Notes of the room</h3>
-      <ol id="roomNotes" class="neuronlist"></ol>
+      <div id="roomBox" hidden>
+        <div class="row">
+          <div><label class="field" for="roomLink">Link to the room</label>
+            <input id="roomLink" readonly></div>
+          <button class="button" id="copyLink">Copy</button>
+          <button class="button" id="leave">Leave the room</button>
+        </div>
+        <p id="roomPeople" class="hint"></p>
+        <h3 id="roomNotesTitle" hidden>Notes of the room</h3>
+        <ol id="roomNotes" class="neuronlist"></ol>
+      </div>
+      <p id="roomStatus" class="hint" aria-live="polite"></p>
     </div>
-    <p id="roomStatus" class="hint" aria-live="polite"></p>
   </section>
 
-  <section class="run" aria-labelledby="runTitle">
-    <h2 id="runTitle">Your text</h2>
-    <p class="hint" id="modelStatus">The model is 269&nbsp;MB from Hugging Face. The browser keeps it after the first load.</p>
-    <button class="button" id="load">Load the model</button>
-    <label class="field" for="text">Text (the first 128 tokens run)</label>
-    <textarea id="text" rows="4">The Eiffel Tower is in Paris, the capital of France. It opened in 1889.</textarea>
-    <button class="button" id="run" disabled>Run</button>
-    <div id="tokens" class="tokens" aria-label="Tokens of your text. Select one to see its neurons."></div>
-    <h3 id="topTitle" hidden>Strongest neurons at <q id="topToken"></q></h3>
-    <ol id="top" class="neuronlist"></ol>
+  <section aria-labelledby="your-text">
+    <h2 id="your-text"><a href="#your-text">Your text</a></h2>
+    <p>The model is 269&nbsp;MB from Hugging Face. The browser keeps it after the first load.
+      Run your text, then select a token to see its strongest neurons.</p>
+    <div class="framed box panel">
+      <button class="button" id="load">Load the model</button>
+      <p class="hint" id="modelStatus" aria-live="polite"></p>
+      <label class="field" for="text">Text (the first 128 tokens run)</label>
+      <textarea id="text" rows="4">The Eiffel Tower is in Paris, the capital of France. It opened in 1889.</textarea>
+      <button class="button" id="run" disabled>Run</button>
+      <div id="tokens" class="tokens" aria-label="Tokens of your text. Select one to see its neurons."></div>
+      <h3 id="topTitle" hidden>Strongest neurons at <q id="topToken"></q></h3>
+      <ol id="top" class="neuronlist"></ol>
+    </div>
   </section>
 
-  <section class="neuron" aria-live="polite">
-    <span class="kind" id="nId"></span>
-    <h2 id="nLabel"></h2>
+  <section class="neuron" aria-labelledby="neuron" aria-live="polite">
+    <h2 id="neuron"><a href="#neuron">The neuron</a></h2>
+    <p><span id="nId" class="muted"></span><br><strong id="nLabel"></strong></p>
     <p id="nDesc"></p>
-    <p class="hint" id="nStats"></p>
-    <div id="noteBox" hidden>
+    <p class="muted" id="nStats"></p>
+    <div id="noteBox" class="framed box panel" hidden>
       <label class="field" for="note">Note of the room on this neuron</label>
       <textarea id="note" rows="2" maxlength="500"></textarea>
       <button class="button" id="saveNote">Save the note</button>
       <p id="noteStatus" class="hint" aria-live="polite"></p>
     </div>
-    <div id="nLive"></div>
+
     <h3>Top contexts</h3>
-    <p class="hint">From the sweep. The colour of a token is the neuron's value on it.</p>
-    <ol id="nExamples" class="contexts"></ol>
+    <figure class="framed">
+      <div class="box panel"><div id="nLive"></div><ol id="nExamples" class="contexts"></ol></div>
+      <figcaption class="caption">From the sweep. The colour of a token is the neuron's value on it.</figcaption>
+    </figure>
+
     <h3>Steering</h3>
-    <p class="hint">The neuron is set to a value at every position, and the model continues the prompt.</p>
-    <div id="nSteer"></div>
-    <div class="steer">
-      <label class="field" for="steerPrompt">Prompt</label>
-      <input id="steerPrompt" value="My favourite thing is">
-      <label class="field" for="steerValue">Value <output id="steerOut"></output></label>
-      <input id="steerValue" type="range" min="-2" max="3" step="0.1" value="1">
-      <button class="button" id="generate" disabled>Generate</button>
-      <div class="pair">
-        <div><span class="kind">Unsteered</span><p id="genBase" class="gen"></p></div>
-        <div><span class="kind">Steered</span><p id="genSteer" class="gen"></p></div>
+    <p>The neuron is set to a value at every position, and the model continues the prompt.</p>
+    <figure class="framed">
+      <div class="box panel">
+        <div id="nSteer"></div>
+        <label class="field" for="steerPrompt">Prompt</label>
+        <input id="steerPrompt" value="My favourite thing is">
+        <label class="field" for="steerValue">Value <output id="steerOut"></output></label>
+        <input id="steerValue" type="range" min="-2" max="3" step="0.1" value="1">
+        <button class="button" id="generate" disabled>Generate</button>
+        <div class="pair">
+          <div><span class="field">Unsteered</span><p id="genBase" class="gen"></p></div>
+          <div><span class="field">Steered</span><p id="genSteer" class="gen"></p></div>
+        </div>
       </div>
-    </div>
+      <figcaption class="caption">Generate runs after you load the model.</figcaption>
+    </figure>
+
     <h3>Jacobian lens</h3>
-    <p class="hint">How much each next-token logit and each neuron of the later layers changes for each unit of
+    <p>How much each next-token logit and each neuron of the later layers changes for each unit of
       change of this neuron, at the selected token of your text.</p>
-    <button class="button" id="lens" disabled>Compute the lens</button>
-    <div id="lensOut"></div>
+    <div class="framed box panel">
+      <button class="button" id="lens" disabled>Compute the lens</button>
+      <div id="lensOut"></div>
+    </div>
+
     <h3>Swap</h3>
-    <p class="hint">This neuron's value at the selected token of your text and its value at the last token of the
+    <p>This neuron's value at the selected token of your text and its value at the last token of the
       other text change places. Then the model predicts the next token of each text.</p>
-    <label class="field" for="swapText">Other text</label>
-    <input id="swapText" value="The Colosseum is in Rome, the capital of">
-    <button class="button" id="swap" disabled>Swap</button>
-    <div id="swapOut"></div>
+    <div class="framed box panel">
+      <label class="field" for="swapText">Other text</label>
+      <input id="swapText" value="The Colosseum is in Rome, the capital of">
+      <button class="button" id="swap" disabled>Swap</button>
+      <div id="swapOut"></div>
+    </div>
   </section>
 
-  <section class="index" aria-labelledby="indexTitle">
-    <h2 id="indexTitle">Find a neuron</h2>
-    <label class="field" for="search">Search the labels, a neuron such as 16.1275, or a token that a neuron fires on</label>
-    <input id="search" type="search" placeholder="comma, French, 16.1275">
-    <ol id="results" class="neuronlist results"></ol>
+  <section aria-labelledby="find">
+    <h2 id="find"><a href="#find">Find a neuron</a></h2>
+    <div class="framed box panel">
+      <label class="field" for="search">Search the labels, a neuron such as 16.1275, or a token that a neuron fires on</label>
+      <input id="search" type="search" placeholder="comma, French, 16.1275">
+      <ol id="results" class="neuronlist results"></ol>
+    </div>
   </section>
 
-  <section class="ask" aria-labelledby="askTitle">
-    <h2 id="askTitle">Ask Claude</h2>
-    <p class="hint">Claude gets this neuron's contexts, steering samples and your text, then answers your question.
+  <section aria-labelledby="ask-claude">
+    <h2 id="ask-claude"><a href="#ask-claude">Ask Claude</a></h2>
+    <p>Claude gets this neuron's contexts, steering samples and your text, then answers your question.
       This page cannot ask Claude for you. Put your own <a href="https://openrouter.ai/keys">OpenRouter key</a> here.
       The browser sends it only to openrouter.ai, and keeps it only in this tab until you close it.</p>
-    <label class="field" for="key">OpenRouter key</label>
-    <input id="key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="sk-or-…">
-    <label class="field" for="askModel">Model</label>
-    <select id="askModel">
-      <option value="anthropic/claude-sonnet-5.5">Claude Sonnet 5.5</option>
-      <option value="anthropic/claude-opus-5.5">Claude Opus 5.5</option>
-      <option value="anthropic/claude-haiku-5.5">Claude Haiku 5.5</option>
-    </select>
-    <label class="field" for="question">Question</label>
-    <textarea id="question" rows="3">What does this neuron detect, and what does it do to the text when it is steered?</textarea>
-    <button class="button" id="ask">Ask</button>
-    <div id="answer" class="answer"></div>
+    <div class="framed box panel">
+      <label class="field" for="key">OpenRouter key</label>
+      <input id="key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="sk-or-…">
+      <label class="field" for="askModel">Model</label>
+      <select id="askModel">
+        <option value="anthropic/claude-sonnet-5.5">Claude Sonnet 5.5</option>
+        <option value="anthropic/claude-opus-5.5">Claude Opus 5.5</option>
+        <option value="anthropic/claude-haiku-5.5">Claude Haiku 5.5</option>
+      </select>
+      <label class="field" for="question">Question</label>
+      <textarea id="question" rows="3">What does this neuron detect, and what does it do to the text when it is steered?</textarea>
+      <button class="button" id="ask">Ask</button>
+      <div id="answer" class="answer"></div>
+    </div>
   </section>
 
-  <section class="about">
-    <h2>How it works</h2>
+  <section aria-labelledby="how">
+    <h2 id="how"><a href="#how">How it works</a></h2>
     <p>A neuron is one of the 1,536 values per layer between the up projection and the down projection of the
       MLP: <code>silu(gate_proj(x)) × up_proj(x)</code>. The sweep ran the model over text from FineWeb-Edu and
       Cosmopedia, and kept each neuron's mean, standard deviation and top contexts. Claude labelled the neurons
@@ -142,10 +165,6 @@
       Source: <a href="https://github.com/yujieteo/neurons">github.com/yujieteo/neurons</a>.</p>
   </section>
 </main>
-
-<footer class="wrap">
-  <a href="https://teoyujie.org/">teoyujie.org</a>
-</footer>
 <script type="module" src="app.js"></script>
 </body>
 </html>
