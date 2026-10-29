@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Neurons</title>
 <meta name="description" content="Read, steer, lens and swap the MLP neurons of SmolLM2-135M in the browser. The model runs in Goose, compiled to WebAssembly.">
+<meta name="theme-color" content="#fdfdfc">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://teoyujie.org/shared/kowalski.css">
 <link rel="stylesheet" href="style.css">
@@ -32,14 +33,14 @@
     <div class="roomrow">
       <div><label class="field" for="roomName">Your name in the room</label>
         <input id="roomName" maxlength="32" autocomplete="nickname"></div>
-      <button id="share">Share a link</button>
+      <button class="button" id="share">Share a link</button>
     </div>
     <div id="roomBox" hidden>
       <div class="roomrow">
         <div><label class="field" for="roomLink">Link to the room</label>
           <input id="roomLink" readonly></div>
-        <button id="copyLink">Copy</button>
-        <button id="leave">Leave the room</button>
+        <button class="button" id="copyLink">Copy</button>
+        <button class="button" id="leave">Leave the room</button>
       </div>
       <p id="roomPeople" class="hint"></p>
       <h3 id="roomNotesTitle" hidden>Notes of the room</h3>
@@ -51,10 +52,10 @@
   <section class="run" aria-labelledby="runTitle">
     <h2 id="runTitle">Your text</h2>
     <p class="hint" id="modelStatus">The model is 269&nbsp;MB from Hugging Face. The browser keeps it after the first load.</p>
-    <button id="load">Load the model</button>
+    <button class="button" id="load">Load the model</button>
     <label class="field" for="text">Text (the first 128 tokens run)</label>
     <textarea id="text" rows="4">The Eiffel Tower is in Paris, the capital of France. It opened in 1889.</textarea>
-    <button id="run" disabled>Run</button>
+    <button class="button" id="run" disabled>Run</button>
     <div id="tokens" class="tokens" aria-label="Tokens of your text. Select one to see its neurons."></div>
     <h3 id="topTitle" hidden>Strongest neurons at <q id="topToken"></q></h3>
     <ol id="top" class="neuronlist"></ol>
@@ -68,7 +69,7 @@
     <div id="noteBox" hidden>
       <label class="field" for="note">Note of the room on this neuron</label>
       <textarea id="note" rows="2" maxlength="500"></textarea>
-      <button id="saveNote">Save the note</button>
+      <button class="button" id="saveNote">Save the note</button>
       <p id="noteStatus" class="hint" aria-live="polite"></p>
     </div>
     <div id="nLive"></div>
@@ -83,7 +84,7 @@
       <input id="steerPrompt" value="My favourite thing is">
       <label class="field" for="steerValue">Value <output id="steerOut"></output></label>
       <input id="steerValue" type="range" min="-2" max="3" step="0.1" value="1">
-      <button id="generate" disabled>Generate</button>
+      <button class="button" id="generate" disabled>Generate</button>
       <div class="pair">
         <div><span class="kind">Unsteered</span><p id="genBase" class="gen"></p></div>
         <div><span class="kind">Steered</span><p id="genSteer" class="gen"></p></div>
@@ -92,14 +93,14 @@
     <h3>Jacobian lens</h3>
     <p class="hint">How much each next-token logit and each neuron of the later layers changes for each unit of
       change of this neuron, at the selected token of your text.</p>
-    <button id="lens" disabled>Compute the lens</button>
+    <button class="button" id="lens" disabled>Compute the lens</button>
     <div id="lensOut"></div>
     <h3>Swap</h3>
     <p class="hint">This neuron's value at the selected token of your text and its value at the last token of the
       other text change places. Then the model predicts the next token of each text.</p>
     <label class="field" for="swapText">Other text</label>
     <input id="swapText" value="The Colosseum is in Rome, the capital of">
-    <button id="swap" disabled>Swap</button>
+    <button class="button" id="swap" disabled>Swap</button>
     <div id="swapOut"></div>
   </section>
 
@@ -116,7 +117,7 @@
       This page cannot ask Claude for you. Put your own <a href="https://openrouter.ai/keys">OpenRouter key</a> here.
       The browser sends it only to openrouter.ai, and keeps it only in this tab until you close it.</p>
     <label class="field" for="key">OpenRouter key</label>
-    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-or-…">
+    <input id="key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="sk-or-…">
     <label class="field" for="askModel">Model</label>
     <select id="askModel">
       <option value="anthropic/claude-sonnet-5.5">Claude Sonnet 5.5</option>
@@ -125,7 +126,7 @@
     </select>
     <label class="field" for="question">Question</label>
     <textarea id="question" rows="3">What does this neuron detect, and what does it do to the text when it is steered?</textarea>
-    <button id="ask">Ask</button>
+    <button class="button" id="ask">Ask</button>
     <div id="answer" class="answer"></div>
   </section>
 

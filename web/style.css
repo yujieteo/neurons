@@ -1,35 +1,38 @@
-/* The grid of the explorer. The tokens, the fonts and the interaction rules come from
-   https://teoyujie.org/shared/kowalski.css, which index.html links first. */
+/* The grid of the explorer. The tokens, the fonts, the interaction rules and the look of the
+   .button class come from https://teoyujie.org/shared/kowalski.css, which index.html links first. */
 /* --accent (#63635e) as its rgb parts, for the token heat map */
 :root { --accent-rgb: 99, 99, 94; }
 
-a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+a:focus-visible, button:not(.button):focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 3px;
 }
 code { font: 0.92em var(--mono); overflow-wrap: anywhere; }
 .wrap { max-width: 72rem; margin: 0 auto; padding-left: clamp(1rem, 4vw, 3rem); padding-right: clamp(1rem, 4vw, 3rem); }
 
 header.wrap { padding-top: clamp(1.5rem, 5vw, 3rem); padding-bottom: 1rem; }
-.kind { font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-h1, h2, h3 { font-weight: 400; }
+/* "case": Inter's case-sensitive forms set the · and the parentheses to the capitals, https://rsms.me/inter/#features/case */
+.kind { font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); font-feature-settings: "cv01", "ss03", "case"; }
+h1, h2, h3 { font-weight: 400; text-wrap: balance; }
+p, figcaption { text-wrap: pretty; }
 h1 { font-size: clamp(2.5rem, 6vw, 4.75rem); line-height: 1.06; letter-spacing: -0.015em; margin: 0.5rem 0 0; }
-.lede { font-size: 1.25rem; color: var(--muted); margin: 1.25rem 0 0; max-width: 46rem; text-wrap: pretty; }
+.lede { font-size: 1.25rem; color: var(--muted); margin: 1.25rem 0 0; max-width: 46rem; }
 h2 { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.15; margin: 0.25rem 0 0.75rem; }
 h3 { font-size: 1.25rem; margin: 1.75rem 0 0.25rem; }
-.hint { font-size: 0.875rem; color: var(--muted); margin: 0.25rem 0 0.75rem; }
+.hint { font-size: 0.875rem; color: var(--muted); margin: 0.25rem 0 0.75rem; max-width: 65ch; overflow-wrap: anywhere; }
+#modelStatus, output { font-variant-numeric: tabular-nums; }
 
 main { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 2.5rem 3.5rem; padding-bottom: 4rem; }
 main > section { border-top: 1px solid var(--ink); padding-top: 1.25rem; min-width: 0; }
 .layers { grid-column: 1 / -1; margin: 1rem 0 0; }
 .layers canvas { display: block; width: 100%; aspect-ratio: 5 / 2; cursor: pointer; }
-figcaption { font-size: 0.875rem; color: var(--muted); margin-top: 0.75rem; max-width: 52rem; }
+figcaption { font-size: 0.875rem; color: var(--muted); margin-top: 0.75rem; max-width: 65ch; }
 .together { grid-column: 1 / -1; grid-row: 2; }
 .run { grid-column: 1; grid-row: 3 / span 2; }
 .neuron { grid-column: 2; grid-row: 3; }
 .index { grid-column: 1; }
 .ask { grid-column: 2; }
 .about { grid-column: 1 / -1; max-width: 46rem; }
-.about p { margin: 0 0 1rem; }
+.about p { margin: 0 0 1rem; max-width: 65ch; }
 @media (max-width: 52rem) {
   main { grid-template-columns: minmax(0, 1fr); }
   .together, .run, .neuron, .index, .ask { grid-column: 1; grid-row: auto; }
@@ -37,18 +40,16 @@ figcaption { font-size: 0.875rem; color: var(--muted); margin-top: 0.75rem; max-
 }
 
 button, input, textarea, select { font: inherit; color: var(--ink); }
-button {
-  font-size: 0.9rem; background: transparent; border: 1px solid var(--ink); border-radius: 999px;
-  padding: 6px 16px; cursor: pointer; margin: 0.25rem 0;
-}
+button { cursor: pointer; }
+.button { margin: 0.25rem 0; }
 @media (hover: hover) and (pointer: fine) {
-  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-  .tokens .tok:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
+  .tokens .tok:hover:not(:disabled) { border-color: var(--accent); }
+  .neuronlist .item:hover { background: var(--hover); }
 }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 .field { display: block; font-size: 0.875rem; font-weight: 500; margin: 0.75rem 0 0.25rem; }
 input:not([type=range]), textarea, select {
-  width: 100%; min-height: var(--tap); background: var(--chip); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; font-size: 0.95rem;
+  width: 100%; min-height: var(--tap); background: var(--chip); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; font-size: 1rem;
 }
 textarea { resize: vertical; }
 input[type=range] { width: 100%; height: var(--tap); margin: 0; accent-color: var(--accent); }
@@ -75,13 +76,13 @@ output { font-weight: 400; color: var(--muted); margin-left: 0.5rem; }
 .neuronlist { list-style: none; margin: 0.5rem 0 0; padding: 0; }
 .neuronlist .item {
   display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: 0.75rem; width: 100%; min-height: var(--tap); text-align: left;
-  border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0.4rem 0; margin: 0;
+  font-size: 0.9rem; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0.4rem 0; margin: 0;
 }
 .neuronlist .id { font: 0.85rem var(--mono); color: var(--muted); }
 .neuronlist .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .neuronlist .known .what { color: var(--ink); }
 .neuronlist .z { font: 0.8rem var(--mono); color: var(--muted); }
-.results { max-height: 32rem; overflow-y: auto; }
+.results { max-height: 32rem; overflow-y: auto; overscroll-behavior: contain; }
 
 table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
 th { text-align: left; font-weight: 500; color: var(--muted); font-size: 0.8125rem; }
@@ -90,13 +91,13 @@ td:first-child { white-space: nowrap; font-family: var(--mono); font-size: 0.8re
 td b { font-weight: 500; }
 .steer { margin-top: 1rem; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem; }
-.gen { white-space: pre-wrap; margin: 0.25rem 0 0; min-height: 3rem; font-size: 0.95rem; }
+.gen { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.25rem 0 0; min-height: 3rem; font-size: 0.95rem; }
 .probe { margin-top: 0.5rem; }
 .probe td:not(:first-child) { font: 0.8rem var(--mono); }
 .roomrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0.75rem; }
 .roomrow > div { flex: 1 1 18rem; max-width: 34rem; }
 .roomrow button { margin-bottom: 0.1rem; }
 .answer { margin-top: 1rem; }
-.answer p { margin: 0 0 0.75rem; white-space: pre-wrap; }
+.answer p { margin: 0 0 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 footer { border-top: 1px solid var(--line); padding-top: 2rem; padding-bottom: 3rem; font-size: 0.875rem; color: var(--muted); }
