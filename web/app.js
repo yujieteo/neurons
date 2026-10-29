@@ -615,6 +615,13 @@ addEventListener("hashchange", () => {
   const id = roomOfHash(location.hash);
   if (id && id !== roomId) { exitRoom(); enterRoom(id, false); }
 });
+// A heading link scrolls only: the hash keeps the neuron or the room.
+document.addEventListener("click", (e) => {
+  const link = e.target.closest?.("h2 a");
+  if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  link.parentElement.scrollIntoView({ block: "start" });
+});
 addEventListener("pagehide", () => room?.leave());
 addEventListener("pageshow", (e) => { if (e.persisted && roomId) enterRoom(roomId, false); });
 
