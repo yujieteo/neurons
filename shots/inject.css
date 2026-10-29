@@ -1,0 +1,8 @@
+/* For screenshots only: the .button rules that the site PR adds to /shared/kowalski.css, from Sonner's .button. */
+:root { --gray1: #fcfcfc; --gray2: #f8f8f8; --gray3: #f3f3f3; --gray4: #ededed; --gray7: #dbdbdb; }
+.button { padding: 8px 12px; margin: 0; background: var(--gray1); border: 1px solid var(--gray3); border-radius: 6px;
+  font-size: 13px; font-weight: 500; color: var(--ink);
+  transition: transform var(--press-duration) var(--ease-out), border-color 200ms, background 200ms, box-shadow 200ms; }
+@media (hover: hover) and (pointer: fine) { .button:hover { background: var(--gray2); border-color: var(--gray4); } }
+.button[data-active=true] { background: var(--gray3); border-color: var(--gray7); }
+.button:focus-visible { outline: none; box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 1px 0 0 rgba(0,0,0,.08), 0 2px 2px 0 rgba(0,0,0,.04), 0 3px 3px 0 rgba(0,0,0,.02), 0 4px 4px 0 rgba(0,0,0,.01), 0 0 0 2px rgba(0,0,0,.15); }
