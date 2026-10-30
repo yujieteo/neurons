@@ -3,16 +3,19 @@
    with an anchor on hover, and each interactive part in a framed box with a caption below it.
    The tokens, the fonts, the interaction rules and the .button class come from
    https://teoyujie.org/shared/kowalski.css, which index.html links first. */
-/* --accent (#63635e) as its rgb parts, for the token heat map; --caption is the gray-1000 of the article */
-:root { --accent-rgb: 99, 99, 94; --caption: #82827c; }
+/* --accent (#63635e) as its rgb parts, for the token heat map */
+:root { --accent-rgb: 99, 99, 94; }
 
 a:focus-visible, button:not(.button):focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 3px;
 }
 .column { max-width: var(--column); margin: 0 auto; padding-left: var(--gutter); padding-right: var(--gutter); }
-.top { display: flex; flex-direction: column; align-items: flex-start; padding-top: 64px; margin-bottom: 128px; }
-.top a { font-weight: 500; text-decoration: none; }
-h1 { font-size: 1rem; font-weight: 500; line-height: 1; margin: 0; color: var(--muted); }
+/* the site header of teoyujie.org */
+.top { display: flex; flex-direction: column; align-items: flex-start; padding-top: 48px; }
+.top .name { font-weight: 500; text-decoration: none; }
+.top .tagline { font-weight: 500; line-height: 1; color: var(--muted); }
+@media (min-width: 768px) { .top { padding-top: 64px; } }
+h1 { font-size: 1rem; font-weight: 500; line-height: 1.5; margin: 4rem 0; }
 main { padding-bottom: 128px; }
 p { margin: 0 0 26px; line-height: 1.65; text-wrap: pretty; }
 .muted { color: var(--muted); }
@@ -34,7 +37,7 @@ figure.framed { margin-left: 0; margin-right: 0; }
 .box { background: #fff; border-radius: 12px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 2px 0 rgba(0, 0, 0, 0.04); }
 .panel { padding: 17px 23px; }
 .box canvas { display: block; width: 100%; aspect-ratio: 5 / 3; cursor: pointer; }
-.caption { margin: 16px 0 0; font-size: 12px; line-height: 16px; color: var(--caption); text-align: center; text-wrap: pretty; }
+.caption { margin: 16px 0 0; font-size: 12px; line-height: 16px; color: var(--muted); text-align: center; text-wrap: pretty; }
 @media (max-width: 640px) {
   .box { margin-left: calc(-1 * var(--gutter)); margin-right: calc(-1 * var(--gutter)); border-radius: 0;
     box-shadow: none; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -47,7 +50,6 @@ code { font: 12px var(--mono); background: var(--chip); border: 1px solid var(--
 /* controls inside a box */
 button { cursor: pointer; }
 .panel .button { margin: 4px 0 8px; }
-button:disabled { opacity: 0.45; cursor: not-allowed; }
 input, textarea, select { font: inherit; color: var(--ink); }
 .field { display: block; font-size: 0.875rem; font-weight: 500; margin: 12px 0 4px; }
 .panel > .field:first-child, .panel > .row:first-child .field { margin-top: 0; }
@@ -87,8 +89,10 @@ output { color: var(--muted); margin-left: 0.5rem; font-weight: 400; }
 .neuronlist { list-style: none; margin: 8px 0 0; padding: 0; }
 .neuronlist .item {
   display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: 0.75rem; width: 100%; min-height: var(--tap); text-align: left;
-  font-size: 0.875rem; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 6px 0; margin: 0;
+  font: inherit; font-size: 0.875rem; color: inherit; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 6px 0; margin: 0;
 }
+/* the ring inside the row: the scroll box of the results clips a ring outside it */
+.neuronlist .item:focus-visible { outline-offset: -2px; }
 .neuronlist .id { font: 12px var(--mono); color: var(--muted); padding-top: 2px; }
 .neuronlist .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .neuronlist .known .what { color: var(--ink); }

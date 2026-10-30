@@ -133,7 +133,7 @@ function pickToken(p) {
     + "The path runs through the strongest neuron of each layer. At the right, all the values against the normal density.";
   $("topTitle").hidden = false;
   $("topToken").textContent = show(live.pieces[p]);
-  $("top").replaceChildren(...order.slice(0, 12).map((i) => neuronItem(Math.floor(i / F), i % F, `z ${fmt(zs[i], 1)}`)));
+  fillList($("top"), order.slice(0, 12).map((i) => neuronItem(Math.floor(i / F), i % F, `z ${fmt(zs[i], 1)}`)));
   if (selected) {
     renderNeuron();
     layers.select({ ...selected, z: zs[selected.layer * F + selected.index] });
@@ -161,13 +161,36 @@ function renderTokens() {
 // ---- neurons ----
 function neuronItem(l, f, extra) {
   const n = explored.get(`${l}.${f}`);
-  const b = el("button", { className: "item" + (n ? " known" : "") },
+  const b = el("button", { className: "item" + (n ? " known" : ""), tabIndex: -1 },
     el("span", { className: "id", textContent: `${l}.${f}` }),
     el("span", { className: "what", textContent: n ? n.label : peakTokens(l, f).map((t) => `“${show(t)}”`).join(" ") }),
     extra ? el("span", { className: "z", textContent: extra }) : "");
   b.onclick = () => select(l, f);
   return el("li", {}, b);
 }
+
+// A neuron list is one Tab stop (a roving tabindex): Up, Down, Home and End move the focus
+// in the list, and the row that has the focus last is the Tab stop.
+function fillList(list, items) {
+  list.replaceChildren(...items);
+  if (items.length) items[0].firstChild.tabIndex = 0;
+  return list;
+}
+const rowOf = (e) => e.target.closest?.(".neuronlist .item");
+const rowsOf = (b) => [...b.closest(".neuronlist").querySelectorAll(".item")];
+document.addEventListener("focusin", (e) => {
+  const b = rowOf(e);
+  if (b) for (const r of rowsOf(b)) r.tabIndex = r === b ? 0 : -1;
+});
+document.addEventListener("keydown", (e) => {
+  const b = rowOf(e);
+  if (!b || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  const rows = rowsOf(b), i = rows.indexOf(b);
+  const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: rows.length - 1 }[e.key];
+  if (to === undefined) return;
+  e.preventDefault();
+  rows[Math.max(0, Math.min(rows.length - 1, to))].focus();
+});
 
 function contextLine(tokens, values, peak, scale) {
   return el("li", {}, el("span", { className: "v", textContent: fmt(values[peak]) }),
@@ -303,7 +326,7 @@ async function computeLens(fromRoom) {
       + `The derivatives are central differences with a step of ${fmt(h, 3)}, its standard deviation in the sweep.` }),
     el("div", { className: "pair" }, column("Raises", topBy(d.dLogits, 8, (x) => x)), column("Lowers", topBy(d.dLogits, 8, (x) => -x))),
     ...(later.length ? [el("h3", { textContent: "Later neurons it moves most" }),
-      el("ol", { className: "neuronlist" }, ...later.map((i) => neuronItem(Math.floor(i / F), i % F, `∂ ${fmt(d.dNeurons[i], 3)}`)))] : []));
+      fillList(el("ol", { className: "neuronlist" }), later.map((i) => neuronItem(Math.floor(i / F), i % F, `∂ ${fmt(d.dNeurons[i], 3)}`)))] : []));
   lensShown = true;
   if (!fromRoom) share();
 }
@@ -345,7 +368,7 @@ function search() {
       if (!explored.has(`${l}.${f}`) && peakTokens(l, f).some((t) => t.trim().toLowerCase() === ql)) items.push([l, f]);
     }
   }
-  $("results").replaceChildren(...items.slice(0, 200).map(([l, f]) => neuronItem(l, f)));
+  fillList($("results"), items.slice(0, 200).map(([l, f]) => neuronItem(l, f)));
 }
 $("search").oninput = search;
 
@@ -493,7 +516,7 @@ function renderRoomNotes() {
   const notes = [...roomNotes.values()].map((n) => ({ ...n, at: n.neuron.split(".").map(Number) }))
     .filter((n) => n.at[0] < L && n.at[1] < F).sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1]);
   $("roomNotesTitle").hidden = !notes.length;
-  $("roomNotes").replaceChildren(...notes.map((n) => {
+  fillList($("roomNotes"), notes.map((n) => {
     const li = neuronItem(n.at[0], n.at[1], n.by);
     li.querySelector(".what").textContent = n.text.split("\n")[0];
     return li;
