@@ -19,7 +19,7 @@ h1 { font-size: 1rem; font-weight: 500; line-height: 1.5; margin: 4rem 0; }
 main { padding-bottom: 128px; }
 p { margin: 0 0 26px; line-height: 1.65; text-wrap: pretty; }
 .muted { color: var(--muted); }
-#nStats, #modelStatus, output { font-variant-numeric: tabular-nums; }
+.nums, output { font-variant-numeric: tabular-nums; }
 strong { font-weight: 550; }
 
 /* headings: weight 550 at body size, a "#" at the left on hover or focus */
@@ -37,7 +37,7 @@ figure.framed { margin-left: 0; margin-right: 0; }
 .box { background: #fff; border-radius: 12px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 2px 0 rgba(0, 0, 0, 0.04); }
 .panel { padding: 17px 23px; }
 .box canvas { display: block; width: 100%; aspect-ratio: 5 / 3; cursor: pointer; }
-.caption { margin: 16px 0 0; font-size: 12px; line-height: 16px; color: var(--muted); text-align: center; text-wrap: pretty; }
+.caption { margin: 16px 0 0; font-size: 0.75rem; line-height: calc(4 / 3); color: var(--muted); text-align: center; text-wrap: pretty; }
 @media (max-width: 640px) {
   .box { margin-left: calc(-1 * var(--gutter)); margin-right: calc(-1 * var(--gutter)); border-radius: 0;
     box-shadow: none; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -45,7 +45,7 @@ figure.framed { margin-left: 0; margin-right: 0; }
   .box canvas { aspect-ratio: 1 / 1; }
 }
 
-code { font: 12px var(--mono); background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 2px 3.6px; overflow-wrap: anywhere; }
+code { font: 0.75rem var(--mono); background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 2px 3.6px; overflow-wrap: anywhere; }
 
 /* controls inside a box */
 button { cursor: pointer; }
@@ -81,8 +81,8 @@ output { color: var(--muted); margin-left: 0.5rem; font-weight: 400; }
 .contexts li { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: 0.5rem; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .contexts li:last-child { border-bottom: 0; }
 .contexts li.note { display: block; }
-.contexts .v { font: 12px var(--mono); color: var(--muted); text-align: right; padding-top: 2px; }
-.contexts .ctx { font: 12px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.contexts .v { font: 0.75rem var(--mono); color: var(--muted); text-align: right; padding-top: 2px; }
+.contexts .ctx { font: 0.75rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .contexts .ctx span { background: rgba(var(--accent-rgb), calc(var(--a, 0) * 0.75)); border-radius: 2px; }
 .contexts .ctx .peak { outline: 1px solid var(--ink); }
 
@@ -93,10 +93,10 @@ output { color: var(--muted); margin-left: 0.5rem; font-weight: 400; }
 }
 /* the ring inside the row: the scroll box of the results clips a ring outside it */
 .neuronlist .item:focus-visible { outline-offset: -2px; }
-.neuronlist .id { font: 12px var(--mono); color: var(--muted); padding-top: 2px; }
+.neuronlist .id { font: 0.75rem var(--mono); color: var(--muted); padding-top: 2px; }
 .neuronlist .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .neuronlist .known .what { color: var(--ink); }
-.neuronlist .z { font: 12px var(--mono); color: var(--muted); padding-top: 2px; }
+.neuronlist .z { font: 0.75rem var(--mono); color: var(--muted); padding-top: 2px; }
 .results { max-height: 32rem; overflow-y: auto; overscroll-behavior: contain; }
 @media (hover: hover) and (pointer: fine) {
   .tokens .tok:hover:not(:disabled) { border-color: var(--accent); }
@@ -106,12 +106,12 @@ output { color: var(--muted); margin-left: 0.5rem; font-weight: 400; }
 table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
 th { text-align: left; font-weight: 500; color: var(--muted); }
 td, th { border-bottom: 1px solid var(--line); padding: 6px 8px 6px 0; vertical-align: top; }
-td:first-child { white-space: nowrap; font: 12px var(--mono); }
+td:first-child { white-space: nowrap; font: 0.75rem var(--mono); }
 td b { font-weight: 500; }
-#nSteer table { margin-bottom: 12px; }
+.steer table { margin-bottom: 12px; }
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0 1rem; margin-top: 8px; }
 .gen { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; min-height: 3rem; font-size: 0.875rem; }
 .probe { margin-top: 8px; }
-.probe td:not(:first-child) { font: 12px var(--mono); }
+.probe td:not(:first-child) { font: 0.75rem var(--mono); }
 .answer:not(:empty) { margin-top: 12px; }
 .answer p { margin: 0 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
