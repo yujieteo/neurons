@@ -6,6 +6,7 @@
 <title>Neurons</title>
 <meta name="description" content="Read, steer, lens and swap the MLP neurons of SmolLM2-135M in the browser. The model runs in Goose, compiled to WebAssembly.">
 <meta name="theme-color" content="#fdfdfc">
+<meta name="color-scheme" content="only light">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://teoyujie.org/shared/kowalski.css">
 <link rel="stylesheet" href="style.css">
@@ -59,7 +60,7 @@
       Run your text, then select a token to see its strongest neurons.</p>
     <div class="framed box panel">
       <button class="button" id="load">Load the model</button>
-      <p class="hint" id="modelStatus" aria-live="polite"></p>
+      <p class="hint nums" id="modelStatus" aria-live="polite"></p>
       <label class="field" for="text">Text (the first 128 tokens run)</label>
       <textarea id="text" rows="4">The Eiffel Tower is in Paris, the capital of France. It opened in 1889.</textarea>
       <button class="button" id="run" disabled>Run</button>
@@ -73,7 +74,7 @@
     <h2 id="neuron"><a href="#neuron">The neuron</a></h2>
     <p><span id="nId" class="muted"></span><br><strong id="nLabel"></strong></p>
     <p id="nDesc"></p>
-    <p class="muted" id="nStats"></p>
+    <p class="muted nums" id="nStats"></p>
     <div id="noteBox" class="framed box panel" hidden>
       <label class="field" for="note">Note of the room on this neuron</label>
       <textarea id="note" rows="2" maxlength="500"></textarea>
@@ -91,7 +92,7 @@
     <p>The neuron is set to a value at every position, and the model continues the prompt.</p>
     <figure class="framed">
       <div class="box panel">
-        <div id="nSteer"></div>
+        <div id="nSteer" class="steer"></div>
         <label class="field" for="steerPrompt">Prompt</label>
         <input id="steerPrompt" value="My favourite thing is">
         <label class="field" for="steerValue">Value <output id="steerOut"></output></label>
